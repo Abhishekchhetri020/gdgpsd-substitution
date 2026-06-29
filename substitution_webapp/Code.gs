@@ -1082,44 +1082,12 @@ function generateMemo(plan) {
   const title = 'Substitution — ' + plan.date + ' (' + plan.day + ')';
   const doc = DocumentApp.create(title);
   const body = doc.getBody();
-  body.setMarginTop(40).setMarginBottom(40).setMarginLeft(50).setMarginRight(50);
-
-  // v3.21 — period → "start-end" lookup for the bell-time subtitle in the
-  // Period column (mirrors the Print Memo's <small>{periodTime}</small>).
-  const periodTimes = {};
-  try {
-    const _ftSh = SpreadsheetApp.getActive().getSheetByName(FLAT_TEACHER_TAB);
-    if (_ftSh && _ftSh.getLastRow() > 1) {
-      const _ftData = _ftSh.getRange(2, 3, _ftSh.getLastRow() - 1, 3).getValues();
-      for (const r of _ftData) {
-        const p = String(r[0] || ''), st = String(r[1] || ''), en = String(r[2] || '');
-        if (p && st && en && !periodTimes[p]) periodTimes[p] = st + '-' + en;
-      }
-    }
-  } catch (e) {}
+  body.setMarginTop(22).setMarginBottom(22).setMarginLeft(28).setMarginRight(28);
 
   const NAVY  = '#0041a3';
   const GREY  = '#f3f4f6';
   const BORDR = '#d1d5db';
-  const PINK  = '#fef2f2';
-  const PINKB = '#fecaca';
 
-  // 1. School name — large centered navy heading
-  const h1 = body.appendParagraph('G.D. Goenka Public School, Darbhanga');
-  h1.setHeading(DocumentApp.ParagraphHeading.HEADING1);
-  h1.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
-  h1.editAsText().setForegroundColor(NAVY).setBold(true).setFontSize(18);
-
-  // 2. SUBSTITUTION banner — 1-cell table with navy bg + white centered text
-  const banner = body.appendTable([['SUBSTITUTION']]);
-  const bcell = banner.getRow(0).getCell(0);
-  bcell.setBackgroundColor(NAVY);
-  const bp = bcell.getChild(0).asParagraph();
-  bp.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
-  bp.editAsText().setForegroundColor('#ffffff').setBold(true).setFontSize(13);
-  banner.setBorderColor(NAVY).setBorderWidth(0);
-
-  // 3. Date / Day meta-row — 2-cell light-grey table
   let dateLabel = plan.date;
   try {
     const d = new Date(plan.date + 'T00:00:00');
@@ -1129,32 +1097,53 @@ function generateMemo(plan) {
       dateLabel = weekdays[d.getDay()] + ', ' + d.getDate() + ' ' + months[d.getMonth()] + ' ' + d.getFullYear();
     }
   } catch (e) {}
+
+  const SZ = 8;
+
+  // 1. School header — compact bold centered
+  const school = body.appendParagraph('G.D. Goenka Public School, Darbhanga');
+  school.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
+  school.editAsText().setBold(true).setFontSize(11);
+  school.setLineSpacing(1.0);
+  school.setSpacingAfter(0);
+  school.setSpacingBefore(0);
+
+  // 2. SUBSTITUTION banner — 1-cell borderless table for full-width navy background
+  const banTable = body.appendTable([['SUBSTITUTION']]);
+  const banCell = banTable.getRow(0).getCell(0);
+  banCell.setBackgroundColor(NAVY);
+  banCell.getChild(0).asParagraph().setAlignment(DocumentApp.HorizontalAlignment.CENTER);
+  banCell.editAsText().setForegroundColor('#ffffff').setBold(true).setFontSize(SZ + 1);
+  banCell.setPaddingTop(1).setPaddingBottom(1);
+  banTable.setBorderColor(NAVY).setBorderWidth(0);
+
+  // 3. Date + Day meta row — 2-cell compact table
   const metaTable = body.appendTable([['Date: ' + dateLabel, 'Day: ' + plan.day]]);
-  for (let i = 0; i < 2; i++) {
-    metaTable.getRow(0).getCell(i).setBackgroundColor(GREY);
-    metaTable.getRow(0).getCell(i).editAsText().setFontSize(10);
-  }
-  // Right-align the Day cell
+  metaTable.getRow(0).getCell(0).setBackgroundColor(GREY);
+  metaTable.getRow(0).getCell(0).editAsText().setFontSize(SZ);
+  metaTable.getRow(0).getCell(0).editAsText().setBold(0, 4, true);
+  metaTable.getRow(0).getCell(1).setBackgroundColor(GREY);
+  metaTable.getRow(0).getCell(1).editAsText().setFontSize(SZ);
+  metaTable.getRow(0).getCell(1).editAsText().setBold(0, 3, true);
   metaTable.getRow(0).getCell(1).getChild(0).asParagraph()
     .setAlignment(DocumentApp.HorizontalAlignment.RIGHT);
   metaTable.setBorderColor(BORDR).setBorderWidth(0.5);
-  // Bold the "Date:" / "Day:" labels — Apps Script signature is setBold(start, endInclusive, bold)
-  metaTable.getRow(0).getCell(0).editAsText().setBold(0, 4, true);
-  metaTable.getRow(0).getCell(1).editAsText().setBold(0, 3, true);
+  metaTable.getRow(0).getCell(0).setPaddingTop(1).setPaddingBottom(1);
+  metaTable.getRow(0).getCell(1).setPaddingTop(1).setPaddingBottom(1);
 
-  // 4. Absent list — 1-cell pink-tinted table
+  // 4. Absent list — 1-cell compact table with pink tint
   const absentStr = (plan.absentTeachers && plan.absentTeachers.length)
     ? plan.absentTeachers.join(', ')
     : '(none)';
   const absTable = body.appendTable([['Teachers absent today: ' + absentStr]]);
-  const acell = absTable.getRow(0).getCell(0);
-  acell.setBackgroundColor(PINK);
-  acell.editAsText().setFontSize(10);
-  // Bold the prefix
-  acell.editAsText().setBold(0, 'Teachers absent today:'.length - 1, true);
-  absTable.setBorderColor(PINKB).setBorderWidth(0.5);
+  const absCell = absTable.getRow(0).getCell(0);
+  absCell.setBackgroundColor('#fef2f2');
+  absCell.editAsText().setFontSize(SZ);
+  absCell.editAsText().setBold(0, 'Teachers absent today:'.length - 1, true);
+  absTable.setBorderColor('#fecaca').setBorderWidth(0.5);
+  absCell.setPaddingTop(1).setPaddingBottom(1);
 
-  // 4b. v3.18 — Acting class teacher block (only if any are assigned)
+  // 4b. Acting class teacher block
   const _planActingCT = plan.actingCT || {};
   const _planActingCTFor = plan.actingCTFor || {};
   const _actingEntries = Object.keys(_planActingCT)
@@ -1164,79 +1153,82 @@ function generateMemo(plan) {
       return _planActingCT[cls] + ' — ' + cls + (forName ? ' (for ' + forName + ')' : '');
     });
   if (_actingEntries.length) {
-    const AMBER  = '#fefce8';
-    const AMBERB = '#fde68a';
     const actTable = body.appendTable([['Acting class teachers today: ' + _actingEntries.join(' · ')]]);
     const actCell = actTable.getRow(0).getCell(0);
-    actCell.setBackgroundColor(AMBER);
-    actCell.editAsText().setFontSize(10);
+    actCell.setBackgroundColor('#fefce8');
+    actCell.editAsText().setFontSize(SZ);
     actCell.editAsText().setBold(0, 'Acting class teachers today:'.length - 1, true);
-    actTable.setBorderColor(AMBERB).setBorderWidth(0.5);
+    actTable.setBorderColor('#fde68a').setBorderWidth(0.5);
+    actCell.setPaddingTop(1).setPaddingBottom(1);
   }
 
-  // 5. Main substitution table — same 6 columns as the Print Memo
+  // 5. Main substitution table — compact, mirrors print memo
   const sorted = (plan.substitutions || []).slice().sort((a, b) => (+a.period) - (+b.period));
   const tableData = [['Period', 'Class', 'Subject', 'Absent Teacher', 'Substitute / Action', 'Signature']];
-  let filled = 0, sup = 0, can = 0;
+  let filled = 0, sup = 0, can = 0, pend = 0;
   for (const s of sorted) {
     let subDisplay;
     if (s.status === 'CANCELLED') { subDisplay = 'CANCELLED'; can++; }
     else if (s.status === 'SUPERVISED' && s.substitute) { subDisplay = s.substitute + ' (supervision)'; sup++; }
     else if (s.substitute) { subDisplay = s.substitute; filled++; }
-    else { subDisplay = '— NOT ASSIGNED —'; }
+    else { subDisplay = '— NOT ASSIGNED —'; pend++; }
     tableData.push([
       'P' + String(s.period || ''),
       String(s.class || ''),
       String(s.subject || ''),
       String(s.absent || ''),
       subDisplay,
-      ''     // Signature column — empty for the Principal's ink
+      ''
     ]);
   }
+
   const table = body.appendTable(tableData);
 
-  // Style header row: navy bg + white bold
   const hdr = table.getRow(0);
   for (let i = 0; i < 6; i++) {
     hdr.getCell(i).setBackgroundColor(NAVY);
-    hdr.getCell(i).editAsText().setForegroundColor('#ffffff').setBold(true).setFontSize(10);
+    hdr.getCell(i).editAsText().setForegroundColor('#ffffff').setBold(true).setFontSize(SZ);
   }
-  // Center the Period column for all data rows
+
   for (let r = 1; r < tableData.length; r++) {
-    const periodCell = table.getRow(r).getCell(0);
+    const row = table.getRow(r);
+    const periodCell = row.getCell(0);
     periodCell.getChild(0).asParagraph().setAlignment(DocumentApp.HorizontalAlignment.CENTER);
-    periodCell.editAsText().setBold(true);
-    // Bold the substitute name column
-    const subCell = table.getRow(r).getCell(4);
-    if (sorted[r-1].substitute && sorted[r-1].status !== 'CANCELLED') {
+    periodCell.editAsText().setBold(true).setFontSize(SZ);
+
+    row.getCell(1).editAsText().setFontSize(SZ).setBold(true);
+    row.getCell(2).editAsText().setFontSize(SZ);
+    row.getCell(3).editAsText().setFontSize(SZ);
+    const subCell = row.getCell(4);
+    subCell.editAsText().setFontSize(SZ);
+    if (sorted[r - 1].substitute && sorted[r - 1].status !== 'CANCELLED') {
       subCell.editAsText().setBold(true);
     }
-    // Slightly smaller body-row font
-    for (let c = 0; c < 6; c++) {
-      table.getRow(r).getCell(c).editAsText().setFontSize(10);
-    }
-    // v3.21 — append bell-time subtitle (e.g. "07:30-08:15") below "P{n}".
-    // Must run AFTER the body-row setFontSize(10) loop above, otherwise the
-    // 10-pt sweep would clobber the 7-pt styling on the new paragraph.
-    const _pt = periodTimes[String(sorted[r-1].period)] || '';
-    if (_pt) {
-      const tp = periodCell.appendParagraph(_pt);
-      tp.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
-      tp.editAsText().setBold(false).setFontSize(7).setForegroundColor('#555555');
-    }
+    row.getCell(5).editAsText().setFontSize(SZ);
+
   }
-  table.setBorderColor('#333333').setBorderWidth(0.75);
+  table.setBorderColor('#333333').setBorderWidth(0.5);
 
-  // (v3.15.2) Summary line removed from Google Doc — UI-only stat, no longer in printable output.
-  // Counters `filled`, `sup`, `can` still computed above for any future use, just not rendered.
+  // 6. Summary line — mirrors print memo
+  const summaryParts = [];
+  summaryParts.push(filled + ' filled');
+  summaryParts.push(sup + ' supervised');
+  summaryParts.push(can + ' cancelled');
+  if (pend) summaryParts.push(pend + ' pending');
+  const summary = body.appendParagraph(summaryParts.join('    '));
+  summary.setFontSize(SZ - 1);
+  summary.setForegroundColor('#374151');
+  summary.setSpacingBefore(2);
+  summary.setSpacingAfter(0);
 
-  // 7. Principal signature — right-aligned at the bottom
-  body.appendParagraph('').setSpacingBefore(48);
+  // 7. Principal signature — compact, right-aligned
+  body.appendParagraph('').setSpacingBefore(18);
   const sigLine = body.appendParagraph('_____________________________');
   sigLine.setAlignment(DocumentApp.HorizontalAlignment.RIGHT);
+  sigLine.setFontSize(SZ);
   const sig = body.appendParagraph('Principal');
   sig.setAlignment(DocumentApp.HorizontalAlignment.RIGHT);
-  sig.editAsText().setBold(true).setFontSize(11);
+  sig.editAsText().setBold(true).setFontSize(SZ + 1);
 
   doc.saveAndClose();
   const file = DriveApp.getFileById(doc.getId());
