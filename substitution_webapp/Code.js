@@ -210,13 +210,6 @@ function loadWeeklyLoad() {
 }
 
 // ---- Build the in-memory schedule cache (read once per page load) ----
-// v3.21 — recognise the notebook-correction pseudo-subject in any spelling the
-// ASC export might produce. Keep this in one place; both the sheet-tab path and
-// the XML-derived 'Flat — Teacher' path go through it.
-function _isNotebookSubject(subject) {
-  return String(subject || '').trim().toLowerCase().replace(/\s+/g, ' ') === 'notebook correction';
-}
-
 function loadDayCache() {
   const sh = SpreadsheetApp.getActive().getSheetByName(FLAT_TEACHER_TAB);
   if (!sh) throw new Error("Tab '" + FLAT_TEACHER_TAB + "' not found");
@@ -233,7 +226,6 @@ function loadDayCache() {
     schedule: {},
     coTeachers: {},
     classTeachers: {},          // class → class teacher (from Class Teachers tab)
-    notebook: {},               // v3.21 — teacher → day → period → true (notebook correction)
   };
   const teacherSet = new Set();
   const daysSet = new Set();
@@ -243,17 +235,6 @@ function loadDayCache() {
     const [teacher, day, period, start, end, subject, klass, room] = data[i];
     if (!teacher) continue;
     teacherSet.add(teacher);
-    // v3.21 — Notebook correction is NOT a real period. Even if it arrives here
-    // from the ASC XML as a pseudo-class, it must never make a teacher 'busy':
-    // they stay pickable as substitutes, the UI simply badges and demotes them.
-    if (_isNotebookSubject(subject)) {
-      daysSet.add(day);
-      periodsSet.add(String(period));
-      out.notebook[teacher] = out.notebook[teacher] || {};
-      out.notebook[teacher][day] = out.notebook[teacher][day] || {};
-      out.notebook[teacher][day][String(period)] = true;
-      continue;
-    }
     daysSet.add(day);
     const pStr = String(period);
     periodsSet.add(pStr);
@@ -298,25 +279,6 @@ function loadDayCache() {
     out.teacherSubjects[t] = [...(tSubj[t] || new Set())];
     out.teacherClasses[t]  = [...(tCls[t]  || new Set())];
   }
-  // v3.21 — Notebook Correction tab: Teacher | Day | Period.
-  // Deliberately kept OUT of out.schedule so these teachers stay pickable as
-  // substitutes; the UI badges them and ranks them last instead of hiding them.
-  // Lives in its own tab because refresh_timetable.py rewrites 'Flat — Teacher'
-  // wholesale from the ASC XML and would otherwise wipe these rows.
-  const nbSh = SpreadsheetApp.getActive().getSheetByName('Notebook Correction');
-  if (nbSh && nbSh.getLastRow() > 1) {
-    const nbData = nbSh.getRange(2, 1, nbSh.getLastRow() - 1, 3).getValues();
-    for (const row of nbData) {
-      const t = String((row[0] || '')).trim();
-      const d = String((row[1] || '')).trim();
-      const p = String((row[2] || '')).trim();
-      if (!t || !d || !p) continue;
-      out.notebook[t] = out.notebook[t] || {};
-      out.notebook[t][d] = out.notebook[t][d] || {};
-      out.notebook[t][d][p] = true;
-    }
-  }
-
   // Read Class Teachers tab (v3.9) — class → teacher name. Missing tab is OK (silent empty map).
   const ctSh = SpreadsheetApp.getActive().getSheetByName('Class Teachers');
   if (ctSh && ctSh.getLastRow() > 1) {
