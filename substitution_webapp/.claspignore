@@ -1,0 +1,7 @@
+# Only these three files belong to the Apps Script project.
+# Code.js is a byte-duplicate of Code.gs kept for local reference; pushing both
+# makes clasp report "Conflicting files found" and would duplicate every function.
+**/**
+!Code.gs
+!Index.html
+!appsscript.json

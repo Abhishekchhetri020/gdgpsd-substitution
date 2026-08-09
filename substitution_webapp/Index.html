@@ -272,6 +272,9 @@ body{font-family:'Poppins','Segoe UI',Arial,sans-serif;background:linear-gradien
 /* Co-teacher (split-class) candidate badge */
 .ctx-grid .cand-row.coteacher td.cand-info{background:#fef3c7;box-shadow:inset 3px 0 0 #d97706}
 .ctx-grid .cand-info .badge.coteach{background:#fed7aa;color:#9a3412;font-weight:700}
+/* v3.21 — notebook correction: visible amber warning, still clickable */
+.ctx-grid .cand-row.notebook td.cand-info{background:#fffbeb;box-shadow:inset 3px 0 0 #b45309}
+.ctx-grid .cand-info .badge.notebook{background:#fde68a;color:#78350f;font-weight:700}
 /* v3.7 — mother teacher (last-resort) row + badges */
 .ctx-grid .cand-row.mother td.cand-info{background:#fff7ed;box-shadow:inset 3px 0 0 #f59e0b;opacity:.85}
 .ctx-grid .cand-info .badge.mother{background:#fef3c7;color:#92400e;font-weight:700}
@@ -673,6 +676,12 @@ const MOTHER_TEACHERS = (function() {
   return m;
 })();
 const MOTHER_PENALTY = 100;   // applied silently — no badge, no why-line
+// v3.21 — teachers on notebook correction stay in the list but sort to the bottom.
+// They are NOT hidden: the planner must still be able to pull them in when needed.
+const NOTEBOOK_PENALTY = 150;
+function isOnNotebook(t, day, period) {
+  return !!(((_DATA.notebook || {})[t] || {})[day] || {})[String(period)];
+}
 
 // v3.18 — Acting class teacher helpers
 function _ctReverseMap() {
@@ -2131,6 +2140,12 @@ function renderModalBody() {
         // v3.9 — silent demotion (no badge, no why-line). They just sort to the bottom.
         score -= MOTHER_PENALTY;
       }
+      // v3.21 — notebook correction: visible warning + strong demotion, never hidden.
+      const isNotebook = isOnNotebook(t, day, period);
+      if (isNotebook) {
+        score -= NOTEBOOK_PENALTY;
+        why.push('📓 on notebook correction this period');
+      }
       if (alreadyIn) {
         // Slight penalty + compact badge (no verbose why-line); the highlighted purple cell
         // in the schedule grid below makes the swap-status visually obvious.
@@ -2148,6 +2163,7 @@ function renderModalBody() {
       return {name: t, score, why, today: todayN, week: weekN,
               isCT: (t === ctTeacher && ctMax >= 4),
               isCoTeacher: isCo,
+              isNotebook: isNotebook,
               coSubject: coTeacherInfo[t] || '',
               isMother: isMother,
               motherClass: MOTHER_TEACHERS[t] || '',
@@ -2227,6 +2243,7 @@ function renderCandRow(c, slot, day) {
   const lowClass = c.score < 30 ? ' lowscore' : '';
   const coClass = c.isCoTeacher ? ' coteacher' : '';
   const motherClass = c.isMother ? ' mother' : '';
+  const nbClass = c.isNotebook ? ' notebook' : '';
   const alreadyClass = c.alreadyInSlot ? ' already' : '';
   // v3.16 — green highlight if this is the existing pick for the current slot
   const currentPickClass = c.isCurrentPick ? ' current-pick' : '';
@@ -2235,11 +2252,12 @@ function renderCandRow(c, slot, day) {
   if (c.isOnDuty) badges += '<span class="badge" style="background:#fef3c7;color:#92400e;font-weight:700">🛡 On duty</span>';
   if (c.alreadyInSlot) badges += '<span class="badge already" title="Already substituting ' + escapeHtml(c.alreadyInSlot.class) + ' P' + c.alreadyInSlot.period + ' — click to swap">🔄 In ' + escapeHtml(c.alreadyInSlot.class) + ' P' + c.alreadyInSlot.period + '</span>';
   if (c.isCoTeacher) badges += '<span class="badge coteach">🤝 Co-teacher</span>';
+  if (c.isNotebook) badges += '<span class="badge notebook" title="' + escapeHtml(c.name) + ' has notebook correction in this period. You can still assign them — this is only a warning.">📓 Notebook correction</span>';
   // v3.9 — mother teacher badge removed (silent demotion)
   if (c.isCT) badges += '<span class="badge ct">CT</span>';
   if (c.today > 0) badges += '<span class="badge" title="' + c.today + ' substitution' + (c.today === 1 ? '' : 's') + ' already covered today">Today · ' + c.today + '</span>';
   if (c.week > 0) badges += '<span class="badge week" title="' + c.week + ' substitution' + (c.week === 1 ? '' : 's') + ' covered in the past 7 days (counts against this teacher\'s score for fairness)">Last 7d · ' + c.week + '</span>';
-  let row = '<tr class="cand-row' + lowClass + coClass + motherClass + alreadyClass + currentPickClass + '" onclick="assignFromModal(' + js(c.name) + ')">';
+  let row = '<tr class="cand-row' + lowClass + coClass + motherClass + nbClass + alreadyClass + currentPickClass + '" onclick="assignFromModal(' + js(c.name) + ')">';
   row += '<td class="cand-info">' +
     '<span class="stars' + (c.score < 30 ? ' low' : '') + '">' + stars + '</span>' +
     '<span class="name">' + escapeHtml(c.name) + '</span>' +
@@ -2401,6 +2419,9 @@ function autoFill() {
         score -= (todayExtras[t] || 0) * 5;
         score -= ((_WEEKLY.weekly || {})[t] || 0) * 2;
         if (MOTHER_TEACHERS[t]) score -= MOTHER_PENALTY;
+        // v3.21 — never auto-pick a teacher who is on notebook correction.
+        // They stay selectable by hand in the modal, but auto-fill must leave them alone.
+        if (isOnNotebook(t, day, period)) score -= NOTEBOOK_PENALTY;
         if ((state.dutyPool || []).includes(t)) score += 200;   // v3.13
         return {name: t, score};
       })
