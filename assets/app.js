@@ -340,8 +340,8 @@ function initGalaxy() {
     buildShiva();
   }
 
-  /* Mahadev's presence — the night-graded Adiyogi photograph
-     (MaximusPrasad, CC BY-SA 4.0, via Wikimedia Commons; cropped + graded).
+  /* Mahadev's presence — Adiyogi at night, tightly cropped to the face
+     (Rajdweep nlb, CC BY-SA 4.0, via Wikimedia Commons; cropped + graded).
      Loaded async; the sky simply appears without him until he arrives. */
   function buildShiva() {
     const img = new Image();
