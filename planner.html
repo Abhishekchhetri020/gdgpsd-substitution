@@ -6,54 +6,29 @@
 <title>Substitution Planner — GDGPSD</title>
 <meta name="robots" content="noindex">
 <link rel="icon" href="data:,">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/styles.css">
+<style>
+  html,body{margin:0;padding:0;height:100%;background:#EEF2F7;font-family:'Segoe UI',Arial,sans-serif}
+  #app{display:block;border:0;width:100%;height:100vh}
+  #loading{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+    background:#EEF2F7;color:#0041a3;font-size:.9rem;font-weight:600;letter-spacing:.5px;z-index:2;
+    transition:opacity .4s}
+  #loading.hide{opacity:0;pointer-events:none}
+</style>
 </head>
-<body class="planner-body">
-
-<canvas id="galaxy" aria-hidden="true"></canvas>
-<div class="vignette" aria-hidden="true"></div>
-<div class="grain" aria-hidden="true"></div>
-
-<div class="planner-top">
-  <a class="back" href="index.html">← Back to home</a>
-  <span class="ptitle">SUBSTITUTION PLANNER</span>
-  <span class="pill"><i></i>LIVE APP</span>
-</div>
-
-<div class="planner-wrap">
-  <div class="loader" id="loader">
-    <div class="ring"></div>
-    <p>GATHERING STARLIGHT…</p>
-    <a class="btn btn-ghost btn-sm retry" href="#" id="retry">Retry loading</a>
-  </div>
-  <iframe id="app" title="GDGPSD Substitution Planner" allow="clipboard-write" referrerpolicy="no-referrer"></iframe>
-</div>
-
+<body>
+<div id="loading">Loading planner…</div>
+<iframe id="app" title="GDGPSD Substitution Planner" allow="clipboard-write" referrerpolicy="no-referrer"></iframe>
 <script>
 (function () {
   var BASE = 'https://script.google.com/macros/s/AKfycbyiIvckjAKlunlEGkRZwVOik2wA3-3M7sSIEcNgZoLqGS-oC5FSZqRzcOZnPgDruqu2_A/exec';
   var frame = document.getElementById('app');
-  var loader = document.getElementById('loader');
-  var retry = document.getElementById('retry');
-  function target() { return BASE + (window.location.search || ''); }
-  function load() {
-    loader.classList.remove('hide', 'failed');
-    frame.src = target();
-  }
-  var done = false;
+  var loading = document.getElementById('loading');
+  frame.src = BASE + (window.location.search || '');
   frame.addEventListener('load', function () {
-    if (done) return; done = true;
-    setTimeout(function () { loader.classList.add('hide'); }, 450);
+    setTimeout(function () { loading.classList.add('hide'); }, 300);
   });
-  // if the Apps Script host never answers, offer a retry
-  setTimeout(function () { if (!done) loader.classList.add('failed'); }, 20000);
-  retry.addEventListener('click', function (e) { e.preventDefault(); done = false; load(); });
-  load();
+  setTimeout(function () { loading.classList.add('hide'); }, 15000);
 })();
 </script>
-<script src="assets/app.js" defer></script>
 </body>
 </html>
