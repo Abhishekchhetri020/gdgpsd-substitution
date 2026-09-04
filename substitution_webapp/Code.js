@@ -430,7 +430,7 @@ function _renderActingCTEmail(plan, className, actingName, absentCT, sentBy) {
   const dateLabel = plan.date + ' (' + plan.day + ')';
   return ''
     + '<div style="font-family:Arial,sans-serif;color:#1a202c;max-width:680px;margin:0 auto">'
-    + '<h2 style="color:#0041a3;margin:0 0 4px">G.D. Goenka Public School, Darbhanga</h2>'
+    + '<h2 style="color:#0041a3;margin:0 0 4px">G.D. Goenka School, Darbhanga</h2>'
     + '<div style="background:linear-gradient(135deg,#92400e 0%,#d97706 100%);color:#fff;padding:6px 12px;border-radius:4px;text-align:center;letter-spacing:1.5px;font-weight:700;margin:6px 0 14px">ACTING CLASS TEACHER</div>'
     + '<p>Dear <b>' + safeActing + '</b>,</p>'
     + '<p>You have been designated <b>Acting Class Teacher for ' + safeCls + '</b> on <b>' + dateLabel + '</b>'
@@ -470,7 +470,7 @@ function _renderSubEmail(plan, subName, slots, sentBy) {
   const dateLabel = plan.date;
   return ''
     + '<div style="font-family:Arial,sans-serif;color:#1a202c;max-width:680px;margin:0 auto">'
-    + '<h2 style="color:#0041a3;margin:0 0 4px">G.D. Goenka Public School, Darbhanga</h2>'
+    + '<h2 style="color:#0041a3;margin:0 0 4px">G.D. Goenka School, Darbhanga</h2>'
     + '<div style="background:linear-gradient(135deg,#0041a3 0%,#1a5fdb 100%);color:#fff;padding:6px 12px;border-radius:4px;text-align:center;letter-spacing:1.5px;font-weight:700;margin:6px 0 14px">SUBSTITUTION DUTY</div>'
     + '<p>Dear <b>' + subName.replace(/</g, '&lt;') + '</b>,</p>'
     + '<p>You have been assigned the following substitution duties for <b>' + dateLabel + ' (' + plan.day + ')</b>:</p>'
@@ -1101,7 +1101,7 @@ function generateMemo(plan) {
   const SZ = 8;
 
   // 1. School header — compact bold centered
-  const school = body.appendParagraph('G.D. Goenka Public School, Darbhanga');
+  const school = body.appendParagraph('G.D. Goenka School, Darbhanga');
   school.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
   school.editAsText().setBold(true).setFontSize(11);
   school.setLineSpacing(1.0);
