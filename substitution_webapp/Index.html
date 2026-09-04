@@ -713,6 +713,45 @@ body{font-family:'Poppins','Segoe UI',Arial,sans-serif;background:linear-gradien
   .v4-btn{padding:9px 20px;border-radius:999px;font-size:.8rem;font-weight:700;cursor:pointer;font-family:inherit;border:0}
   .v4-btn.ok{background:linear-gradient(135deg,#f4e2b0,var(--v4-gold) 45%,#9a7a35);color:#14100a}
   .v4-btn.no{background:transparent;color:var(--v4-muted);border:1px solid var(--v4-line)}
+
+  /* ── acting class-teacher section (dark-only: base markup is light-designed) ── */
+  html:not([data-theme="light"]) #acting-ct-section{background:rgba(201,164,92,.07)!important;border-color:rgba(201,164,92,.35)!important}
+  html:not([data-theme="light"]) #acting-ct-section>div:first-child{color:var(--v4-gold-hi)!important}
+  html:not([data-theme="light"]) #acting-ct-section .acting-ct-row{border-color:rgba(201,164,92,.25)!important;color:var(--v4-ink)}
+  html:not([data-theme="light"]) #acting-ct-section .acting-ct-row b{color:var(--v4-gold-hi)}
+  html:not([data-theme="light"]) #acting-ct-section .acting-ct-row span[style]{color:var(--v4-gold-hi)!important}
+  html:not([data-theme="light"]) #acting-ct-section select{background:#141824!important;color:#fff!important;border-color:rgba(201,164,92,.45)!important}
+  html:not([data-theme="light"]) #acting-ct-section select option{background:#141824}
+  html:not([data-theme="light"]) #acting-ct-section>div:last-child{color:var(--v4-faint)!important}
+
+  /* ── long-absence + XML modals: light-designed innards, tuned via theme vars ── */
+  #long-absence-modal label[style], #refresh-xml-modal label[style]{color:var(--v4-muted)!important}
+  #long-absence-modal input, #long-absence-modal select,
+  #refresh-xml-modal input[type="file"]{border-color:var(--v4-line)!important;color:var(--v4-ink)}
+  #long-absence-modal input, #long-absence-modal select{background:rgba(255,255,255,.05)}
+  html[data-theme="light"] #long-absence-modal input, html[data-theme="light"] #long-absence-modal select{background:#fff}
+  #refresh-xml-modal p[style]{color:var(--v4-muted)!important}
+  #refresh-xml-modal h4[style]{color:var(--v4-gold-hi)!important;border-color:var(--v4-line)!important}
+  #refresh-xml-modal #xml-status{color:var(--v4-ink)}
+  #refresh-xml-modal .btn-apply:disabled{opacity:.45}
+  #la-list{color:var(--v4-ink)}
+  #la-list span[style]{color:var(--v4-muted)!important}
+  #la-list b{color:var(--v4-ink)}
+
+  /* ── workload meters (v4) ── */
+  #workload .v4-hint{font-size:.64rem;font-weight:800;letter-spacing:1.5px;color:var(--v4-faint);margin-bottom:8px}
+  #workload .v4-wrow{padding:9px 6px;border-bottom:1px solid var(--v4-line);cursor:pointer;border-radius:8px;transition:background .15s}
+  #workload .v4-wrow:last-child{border-bottom:0}
+  #workload .v4-wrow:hover{background:rgba(201,164,92,.07)}
+  #workload .v4-wrow.fsel{background:rgba(201,164,92,.12);outline:1px solid var(--v4-gold)}
+  #workload .v4-wrow .wtop{display:flex;justify-content:space-between;gap:8px;font-size:.8rem;margin-bottom:6px}
+  #workload .v4-wrow .wtop b{font-weight:600;color:var(--v4-ink)}
+  #workload .v4-wrow .wcnt{font-family:'Space Grotesk',Arial,sans-serif;color:var(--v4-gold-hi);font-weight:700;white-space:nowrap}
+  #workload .v4-wrow .wbar{height:6px;border-radius:99px;background:rgba(128,140,160,.18);overflow:hidden}
+  #workload .v4-wrow .wbar i{display:block;height:100%;border-radius:99px;
+    background:linear-gradient(90deg,var(--v4-navy),var(--v4-gold));transition:width .8s cubic-bezier(.2,.8,.2,1)}
+  #workload .v4-wrow.hot .wcnt{color:var(--v4-red)}
+  #workload .v4-wrow.hot .wbar i{background:linear-gradient(90deg,#f59e0b,var(--v4-red))}
 }
 </style>
 </head>
@@ -747,9 +786,6 @@ body{font-family:'Poppins','Segoe UI',Arial,sans-serif;background:linear-gradien
 
 <div class="title-bar">
   <div class="brand-row">
-    <div class="brand-chip">
-      <img id="brand-logo-tb" class="brand-logo" alt="GDGPSD logo" src="">
-    </div>
     <div>
       <h1>Substitution Planner</h1>
       <div class="sub">v3.16</div>
@@ -2321,12 +2357,16 @@ function renderWorkload() {
     wl.innerHTML = '<div style="color:#9ca3af;font-size:.85rem;padding:8px 0">No assignments yet (today or past 7 days).</div>';
     return;
   }
-  wl.innerHTML = '<table><thead><tr><th>Teacher</th><th class="r">Today</th><th class="r">Last 7d</th></tr></thead><tbody>' +
-    entries.map(([name, v]) =>
-      '<tr class="v4-wrow' + ((state.view && state.view.sub === name) ? ' fsel' : '') + '" data-tname="' + js(name) + '" title="Show only this teacher\'s slots"><td>' + escapeHtml(name) + '</td>' +
-        '<td class="r' + (v.today >= 3 ? ' warn' : '') + '">' + (v.today ? (v.today >= 3 ? '⚠ ' : '') + v.today : '–') + '</td>' +
-        '<td class="r week">' + (v.week || '–') + '</td></tr>'
-    ).join('') + '</tbody></table>';
+  wl.innerHTML = '<div class="v4-hint">CLICK A ROW TO FILTER SLOTS</div>' +
+    entries.map(([name, v]) => {
+      const hot = v.today >= 3;
+      const pct = Math.min(100, ((v.today || 0) + (v.week || 0)) * 10);
+      return '<div class="v4-wrow' + (hot ? ' hot' : '') + ((state.view && state.view.sub === name) ? ' fsel' : '') +
+        '" data-tname="' + js(name) + '" title="Show only slots for this teacher">' +
+        '<div class="wtop"><b>' + escapeHtml(name) + '</b>' +
+        '<span class="wcnt">' + (hot ? '⚠ ' : '') + v.today + ' today · ' + (v.week || 0) + ' / 7d</span></div>' +
+        '<div class="wbar"><i style="width:' + pct + '%"></i></div></div>';
+    }).join('');
 }
 
 function setModalMode(mode) {
@@ -2771,6 +2811,8 @@ function autoFill() {
 }
 
 function publish(makeMemo) {
+  // v4: any unexpected failure surfaces as a toast instead of a dead click
+  try {
   const pending = state.slots.filter(s => s.status === 'PENDING').length;
   // v4: styled confirms instead of native confirm(). Same three outcomes:
   // abort | save-only | send-emails-then-save.
@@ -2841,6 +2883,9 @@ function publish(makeMemo) {
       'Publish anyway', goPublish);
   } else {
     goPublish();
+  }
+  } catch (err) {
+    v4toast('Something went wrong.', escapeHtml((err && err.message) || String(err)), 'err');
   }
 }
 
@@ -3031,7 +3076,8 @@ function v4renderWeek(){
   const isos = [];
   for (let i = 0; i < 6; i++) {
     const dt = new Date(mon); dt.setDate(dt.getDate() + i);
-    const iso = dt.toISOString().slice(0, 10);
+    // v4 fix: local calendar parts (toISOString is UTC → off-by-one east of Greenwich)
+    const iso = dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0') + '-' + String(dt.getDate()).padStart(2, '0');
     isos.push(iso);
     html += '<div class="wday' + (iso === state.date ? ' active' : '') + '" data-iso="' + iso + '">' +
       '<span class="has" style="display:none"></span>' +
@@ -3182,11 +3228,22 @@ function v4RefreshExplorer(){ v4RenderSlotTools(); v4renderWeek(); }
   if (mid) mid.addEventListener('click', _v4mid);
   const wl = document.getElementById('workload');
   if (wl) wl.addEventListener('click', e => {
-    const tr = e.target.closest ? e.target.closest('tr.v4-wrow') : null;
+    const tr = e.target.closest ? e.target.closest('.v4-wrow') : null;
     if (!tr) return;
     v4FilterSub(tr.getAttribute('data-tname'));
   });
 })();
+
+/* v4: Escape or backdrop-click dismisses the dialog (identical to Cancel) */
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    const bd = document.getElementById('v4-dialog-backdrop');
+    if (bd && bd.classList.contains('show')) _v4hide();
+  }
+});
+document.getElementById('v4-dialog-backdrop').addEventListener('click', e => {
+  if (e.target && e.target.id === 'v4-dialog-backdrop') _v4hide();
+});
 
 init();
 </script>
