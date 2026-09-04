@@ -197,8 +197,6 @@ function paintGlobe(g, x, y, r, type, rot, t, seed) {
   g.save();
   g.beginPath(); g.arc(x, y, r, 0, TAU); g.clip();
   paintTex(g, x, y, r, globeTexture(type), rot);
-  const cl = cloudCache[type] || (cloudCache[type] = cloudTexture(type));
-  if (cl) paintTex(g, x, y, r, cl, rot * 1.35 + seed + t * 0.02, 0.55);
   const light = g.createRadialGradient(x - r * 0.55, y - r * 0.6, r * 0.1, x - r * 0.15, y - r * 0.15, r * 2.1);
   light.addColorStop(0, 'rgba(255,255,255,0.30)');
   light.addColorStop(0.42, 'rgba(255,255,255,0)');
@@ -467,7 +465,7 @@ function initGalaxy() {
       const bx = W * 0.5 - SW / 2 + (mx * 10 + panX) * 0.12;
       const by = H * 0.48 - SH / 2 + (my * 8 + panY) * 0.12;
       ctx.save();
-      ctx.globalAlpha = (0.55 + 0.08 * Math.sin(t * 0.3)) * heroF;
+      ctx.globalAlpha = (0.10 + 0.03 * Math.sin(t * 0.3)) * heroF;
       ctx.drawImage(shiva, bx, by, SW, SH);
       ctx.restore();
     }
