@@ -467,7 +467,7 @@ function initGalaxy() {
       const bx = W * 0.5 - SW / 2 + (mx * 10 + panX) * 0.12;
       const by = H * 0.48 - SH / 2 + (my * 8 + panY) * 0.12;
       ctx.save();
-      ctx.globalAlpha = (0.30 + 0.06 * Math.sin(t * 0.3)) * heroF;
+      ctx.globalAlpha = (0.55 + 0.08 * Math.sin(t * 0.3)) * heroF;
       ctx.drawImage(shiva, bx, by, SW, SH);
       ctx.restore();
     }
