@@ -592,6 +592,8 @@ body{font-family:'Poppins','Segoe UI',Arial,sans-serif;background:linear-gradien
   .cov-dot.open{color:#fca5a5;border-color:rgba(248,113,113,.45);background:rgba(248,113,113,.08);animation:v4pending 2.4s infinite}
   html[data-theme="light"] .cov-dot.open{color:#dc2626}
   .cov-dot.empty{opacity:.3;cursor:default}
+  .cov-dot.active{border-color:var(--v4-gold);color:var(--v4-gold-hi);background:rgba(201,164,92,.14);
+    box-shadow:0 0 16px rgba(201,164,92,.25)}
   .cov-dot:hover{border-color:var(--v4-gold)}
   .subchip{display:inline-flex;align-items:center;gap:6px;font-size:.7rem;font-weight:700;color:var(--v4-gold-hi);
     background:rgba(201,164,92,.12);border:1px solid rgba(201,164,92,.45);border-radius:999px;
@@ -740,10 +742,7 @@ body{font-family:'Poppins','Segoe UI',Arial,sans-serif;background:linear-gradien
 
   /* ── workload meters (v4) ── */
   #workload .v4-hint{font-size:.64rem;font-weight:800;letter-spacing:1.5px;color:var(--v4-faint);margin-bottom:8px}
-  #workload .v4-wrow{padding:9px 6px;border-bottom:1px solid var(--v4-line);cursor:pointer;border-radius:8px;transition:background .15s}
-  #workload .v4-wrow:last-child{border-bottom:0}
-  #workload .v4-wrow:hover{background:rgba(201,164,92,.07)}
-  #workload .v4-wrow.fsel{background:rgba(201,164,92,.12);outline:1px solid var(--v4-gold)}
+  #workload .v4-wrow{padding:9px 6px;border-bottom:1px solid var(--v4-line);border-radius:8px}
   #workload .v4-wrow .wtop{display:flex;justify-content:space-between;gap:8px;font-size:.8rem;margin-bottom:6px}
   #workload .v4-wrow .wtop b{font-weight:600;color:var(--v4-ink)}
   #workload .v4-wrow .wcnt{font-family:'Space Grotesk',Arial,sans-serif;color:var(--v4-gold-hi);font-weight:700;white-space:nowrap}
@@ -752,6 +751,9 @@ body{font-family:'Poppins','Segoe UI',Arial,sans-serif;background:linear-gradien
     background:linear-gradient(90deg,var(--v4-navy),var(--v4-gold));transition:width .8s cubic-bezier(.2,.8,.2,1)}
   #workload .v4-wrow.hot .wcnt{color:var(--v4-red)}
   #workload .v4-wrow.hot .wbar i{background:linear-gradient(90deg,#f59e0b,var(--v4-red))}
+  #workload .spark{display:flex;gap:2px;align-items:flex-end;height:16px;margin-top:5px}
+  #workload .spark i{flex:1;background:rgba(201,164,92,.35);border-radius:2px;min-height:3px}
+  html[data-theme="light"] #workload .spark i{background:rgba(142,115,50,.4)}
 }
 </style>
 </head>
@@ -1276,7 +1278,7 @@ function onDateChange() {
   setStatus('', '');
   // Reset to empty before fetching to avoid leaking previous date's data visually
   state.absent = []; state.slots = []; state.actingCT = {};
-  if (state.view) state.view.sub = null;   // v4: drop substitute filter on date change
+  if (state.view) state.view.period = null;   // v4: drop period filter on date change
   render();
   updateSavePill('saving', 'Loading draft…');
   const targetDate = state.date;
@@ -2357,15 +2359,14 @@ function renderWorkload() {
     wl.innerHTML = '<div style="color:#9ca3af;font-size:.85rem;padding:8px 0">No assignments yet (today or past 7 days).</div>';
     return;
   }
-  wl.innerHTML = '<div class="v4-hint">CLICK A ROW TO FILTER SLOTS</div>' +
+  wl.innerHTML = '<div class="v4-hint">AUTO-UPDATES ON SAVE</div>' +
     entries.map(([name, v]) => {
       const hot = v.today >= 3;
       const pct = Math.min(100, ((v.today || 0) + (v.week || 0)) * 10);
-      return '<div class="v4-wrow' + (hot ? ' hot' : '') + ((state.view && state.view.sub === name) ? ' fsel' : '') +
-        '" data-tname="' + js(name) + '" title="Show only slots for this teacher">' +
+      return '<div class="v4-wrow' + (hot ? ' hot' : '') + '">' +
         '<div class="wtop"><b>' + escapeHtml(name) + '</b>' +
         '<span class="wcnt">' + (hot ? '⚠ ' : '') + v.today + ' today · ' + (v.week || 0) + ' / 7d</span></div>' +
-        '<div class="wbar"><i style="width:' + pct + '%"></i></div></div>';
+        '<div class="wbar"><i style="width:' + pct + '%"></i></div>' + v4spark(name) + '</div>';
     }).join('');
 }
 
@@ -3109,7 +3110,7 @@ function v4renderWeek(){
 }
 
 // ── slot explorer state ──
-state.view = { q: '', sort: 'period', status: 'all', sub: null };
+state.view = { q: '', sort: 'period', status: 'all', period: null };
 function v4SlotCounts(){
   const c = { all: state.slots.length, PENDING: 0, FILLED: 0, SUPERVISED: 0, CANCELLED: 0 };
   for (const s of state.slots) c[s.status] = (c[s.status] || 0) + 1;
@@ -3120,7 +3121,7 @@ function v4VisibleSlots(){
   const q = (v.q || '').trim().toLowerCase();
   let list = state.slots.map((s, idx) => ({ s, idx }));
   if (v.status !== 'all') list = list.filter(({ s }) => s.status === v.status);
-  if (v.sub) list = list.filter(({ s }) => s.sub === v.sub);
+  if (v.period) list = list.filter(({ s }) => String(s.period) === String(v.period));
   if (q) list = list.filter(({ s }) => [s.period, s.class, s.subject, s.absent, s.substitute || '', s.note || ''].join(' ').toLowerCase().includes(q));
   if (v.sort === 'class') list.sort((a, b) => a.s.class.localeCompare(b.s.class) || (+a.s.period) - (+b.s.period));
   else if (v.sort === 'teacher') list.sort((a, b) => a.s.absent.localeCompare(b.s.absent) || (+a.s.period) - (+b.s.period));
@@ -3139,7 +3140,7 @@ function v4PaintSlotList(slotsEl){
     el.innerHTML = '<div class="empty-slots">No slots match this view.<br><button class="add-btn" style="margin-top:10px" onclick="v4ClearSlotView()">✕ Clear search &amp; filters</button></div>';
     return;
   }
-  if (state.view.sort !== 'period') {
+  if (state.view.sort !== 'period' && !state.view.period) {
     let html = '', lastKey = null;
     for (const { s, idx } of vlist) {
       const k = state.view.sort === 'class' ? '▤ ' + s.class : '👤 ' + s.absent;
@@ -3166,13 +3167,10 @@ function v4RenderSlotTools(){
     '<option value="period"' + (v.sort === 'period' ? ' selected' : '') + '>⇅ By period</option>' +
     '<option value="class"' + (v.sort === 'class' ? ' selected' : '') + '>▤ By class</option>' +
     '<option value="teacher"' + (v.sort === 'teacher' ? ' selected' : '') + '>👤 By absent teacher</option></select>' +
-    pill('all') + pill('PENDING') + pill('FILLED') + pill('SUPERVISED') + pill('CANCELLED') +
-    (v.sub ? '<button class="subchip" data-v4clearsub title="Clear substitute filter">👤 ' + escapeHtml(v.sub) + ' ✕</button>' : '');
+    pill('all') + pill('PENDING') + pill('FILLED') + pill('SUPERVISED') + pill('CANCELLED');
   document.getElementById('slot-q').addEventListener('input', e => { state.view.q = e.target.value; v4RenderSlotsOnly(); });
   document.getElementById('slot-sort').addEventListener('change', e => { state.view.sort = e.target.value; v4RenderSlotTools(); v4PaintSlotList(); });
   box.querySelectorAll('[data-v4st]').forEach(b => b.addEventListener('click', () => { state.view.status = b.getAttribute('data-v4st'); v4RefreshExplorer(); v4PaintSlotList(); }));
-  const cs = box.querySelector('[data-v4clearsub]');
-  if (cs) cs.addEventListener('click', () => v4FilterSub(null));
   if (hadFocus) {
     const qi = document.getElementById('slot-q');
     qi.focus();
@@ -3197,23 +3195,45 @@ function v4RenderCovStrip(){
     const ss = state.slots.filter(s => String(s.period) === String(p));
     if (!ss.length) return '<div class="cov-dot empty">P' + p + '</div>';
     const open = ss.some(s => s.status === 'PENDING');
-    return '<div class="cov-dot ' + (open ? 'open' : 'done') + '" title="P' + p + ': ' + ss.length + ' slot(s) — click to jump" data-v4p="' + p + '">P' + p + '</div>';
+    const active = String(state.view.period) === String(p) ? ' active' : '';
+    return '<div class="cov-dot ' + (open ? 'open' : 'done') + active + '" title="P' + p + ': ' + ss.length + ' slot(s) — click to show only this period" data-v4p="' + p + '">P' + p + '</div>';
   }).join('');
   box.querySelectorAll('[data-v4p]').forEach(d => d.addEventListener('click', () => {
-    state.view.status = 'all'; state.view.q = 'P' + d.getAttribute('data-v4p');
-    v4RenderSlotTools(); v4PaintSlotList();
+    const p = d.getAttribute('data-v4p');
+    // v4: toggle exact period filter — plain list, no chips, no headers
+    state.view.period = (String(state.view.period) === String(p)) ? null : p;
+    v4PaintSlotList(); v4RenderCovStrip();
   }));
 }
-function v4FilterSub(n){
-  state.view.sub = (state.view.sub === n) ? null : n;
-  v4RenderSlotTools(); v4PaintSlotList(); renderWorkload();
-  if (state.view.sub) v4toast('Filtered to <b>' + escapeHtml(n) + '</b>.', 'Showing only their slots — click the workload row again to clear.');
-}
 function v4ClearSlotView(){
-  state.view = { q: '', sort: 'period', status: 'all', sub: null };
+  state.view = { q: '', sort: 'period', status: 'all', period: null };
   v4RenderSlotTools(); v4PaintSlotList(); renderWorkload();
 }
-function v4RefreshExplorer(){ v4RenderSlotTools(); v4renderWeek(); }
+function v4RefreshExplorer(){ v4RenderSlotTools(); v4renderWeek(); v4fetchDaily(); }
+
+// ── 7-day per-teacher sparkline data (best-effort, cached 60s) ──
+let _v4dailyTs = 0;
+function v4fetchDaily(){
+  const now = Date.now();
+  if (now - _v4dailyTs < 60000) return;
+  _v4dailyTs = now;
+  if (typeof google === 'undefined' || !getToken()) return;
+  try {
+    google.script.run
+      .withSuccessHandler(r => { window._DAILY = r; renderWorkload(); })
+      .withFailureHandler(() => {})
+      .loadDailyLoad(getToken());
+  } catch (e) {}
+}
+function v4spark(name){
+  const d = window._DAILY;
+  if (!d || !d.perTeacher || !d.perTeacher[name]) return '';
+  const arr = d.perTeacher[name];
+  const mx = Math.max.apply(null, arr.concat([1]));
+  return '<div class="spark">' + arr.map(v =>
+    '<i style="height:' + (v ? Math.max(12, Math.round(v / mx * 100)) : 6) + '%" title="' + v + '"></i>'
+  ).join('') + '</div>';
+}
 
 (function v4boot(){
   try {
@@ -3226,12 +3246,6 @@ function v4RefreshExplorer(){ v4RenderSlotTools(); v4renderWeek(); }
   document.getElementById('v4-dno').addEventListener('click', _v4hide);
   const mid = document.getElementById('v4-dmid');
   if (mid) mid.addEventListener('click', _v4mid);
-  const wl = document.getElementById('workload');
-  if (wl) wl.addEventListener('click', e => {
-    const tr = e.target.closest ? e.target.closest('.v4-wrow') : null;
-    if (!tr) return;
-    v4FilterSub(tr.getAttribute('data-tname'));
-  });
 })();
 
 /* v4: Escape or backdrop-click dismisses the dialog (identical to Cancel) */

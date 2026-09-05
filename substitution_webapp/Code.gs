@@ -209,6 +209,70 @@ function loadWeeklyLoad() {
   return {weekly: weekly, fromDate: sevenDaysAgo.toISOString().slice(0, 10)};
 }
 
+// ---- v4: same two-pass counting as loadWeeklyLoad, but bucketed per date
+// for the last 7 days → drives the per-teacher sparklines. Read-only,
+// additive; loadWeeklyLoad is untouched. ----
+function loadDailyLoad(token) {
+  _requireAuth(token);
+  const ss = SpreadsheetApp.getActive();
+  const days = [];
+  const today = new Date();
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(today.getTime());
+    d.setDate(d.getDate() - i);
+    days.push(Utilities.formatDate(d, 'Asia/Kolkata', 'yyyy-MM-dd'));
+  }
+  function normDate(d) {
+    if (d instanceof Date) return Utilities.formatDate(d, 'Asia/Kolkata', 'yyyy-MM-dd');
+    return String(d || '').slice(0, 10);
+  }
+  const perDay = {};
+  for (const ds of days) perDay[ds] = {};
+  function bump(ds, t) {
+    if (!perDay[ds] || !t) return;
+    perDay[ds][t] = (perDay[ds][t] || 0) + 1;
+  }
+  const draftDates = {};
+  const draftsSh = ss.getSheetByName(DRAFTS_TAB);
+  if (draftsSh && draftsSh.getLastRow() > 1) {
+    const draftData = draftsSh.getDataRange().getValues();
+    for (let i = 1; i < draftData.length; i++) {
+      const dateStr = normDate(draftData[i][0]);
+      if (!perDay[dateStr]) continue;
+      let slots = [];
+      try { slots = JSON.parse(draftData[i][5] || '[]'); } catch (e) { continue; }
+      draftDates[dateStr] = true;
+      for (const s of slots) {
+        if ((s.status === 'FILLED' || s.status === 'SUPERVISED') && s.substitute) bump(dateStr, s.substitute);
+      }
+    }
+  }
+  const logSh = ss.getSheetByName(LOG_TAB);
+  if (logSh && logSh.getLastRow() > 1) {
+    const logData = logSh.getDataRange().getValues();
+    for (let i = 1; i < logData.length; i++) {
+      const row = logData[i];
+      const sub = row[7], status = row[8];
+      if (!sub || status !== 'FILLED') continue;
+      const dateStr = normDate(row[1]);
+      if (!perDay[dateStr] || draftDates[dateStr]) continue;
+      bump(dateStr, sub);
+    }
+  }
+  const perTeacher = {};
+  for (const ds of days) {
+    for (const t of Object.keys(perDay[ds])) {
+      if (!perTeacher[t]) perTeacher[t] = {};
+      perTeacher[t][ds] = perDay[ds][t];
+    }
+  }
+  const out = {};
+  for (const t of Object.keys(perTeacher)) {
+    out[t] = days.map(ds => perTeacher[t][ds] || 0);
+  }
+  return { days: days, perTeacher: out };
+}
+
 // ---- Build the in-memory schedule cache (read once per page load) ----
 function loadDayCache() {
   const sh = SpreadsheetApp.getActive().getSheetByName(FLAT_TEACHER_TAB);
