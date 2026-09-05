@@ -754,6 +754,35 @@ body{font-family:'Poppins','Segoe UI',Arial,sans-serif;background:linear-gradien
   #workload .spark{display:flex;gap:2px;align-items:flex-end;height:16px;margin-top:5px}
   #workload .spark i{flex:1;background:rgba(201,164,92,.35);border-radius:2px;min-height:3px}
   html[data-theme="light"] #workload .spark i{background:rgba(142,115,50,.4)}
+
+  /* ── picker special rows missed in v4.0 (dark washes; light originals restored below) ── */
+  .ctx-grid .cand-row.lowscore td:first-child{background:rgba(255,255,255,.03)}
+  .ctx-grid .cand-row.lowscore td.cand-info{background:rgba(255,255,255,.03)}
+  .ctx-grid .cand-row.coteacher td.cand-info{background:rgba(217,119,6,.12)}
+  .ctx-grid .cand-row.mother td.cand-info{background:rgba(217,119,6,.07);opacity:.9}
+  .ctx-grid .cand-row.already td.cand-info{background:rgba(219,39,119,.10)}
+  .ctx-grid .generic-tier td{background:rgba(255,255,255,.05);color:var(--v4-muted)}
+  .ctx-grid .class-row .slot-cell{box-shadow:inset 0 0 0 2px var(--v4-gold),inset 0 0 0 3px rgba(201,164,92,.4)}
+  .ctx-grid td.cell-slot-this[style]{background:rgba(201,164,92,.22)!important;color:#fff!important}
+  .ctx-grid .cell-absent{background:rgba(219,39,119,.14);color:#f9a8d4}
+  .ctx-grid .cell-supervising{background:rgba(124,58,237,.14);color:#c4b5fd}
+  html[data-theme="light"] .ctx-grid .cand-row.lowscore td:first-child{background:#fafafa}
+  html[data-theme="light"] .ctx-grid .cand-row.lowscore td.cand-info{background:#f9fafb}
+  html[data-theme="light"] .ctx-grid .cand-row.coteacher td.cand-info{background:#fef3c7}
+  html[data-theme="light"] .ctx-grid .cand-row.mother td.cand-info{background:#fff7ed}
+  html[data-theme="light"] .ctx-grid .cand-row.already td.cand-info{background:#fdf2f8}
+  html[data-theme="light"] .ctx-grid .generic-tier td{background:#6b7280;color:#fff}
+  html[data-theme="light"] .ctx-grid .class-row .slot-cell{box-shadow:inset 0 0 0 2px #fff,inset 0 0 0 3px #dc2626}
+  html[data-theme="light"] .ctx-grid td.cell-slot-this[style]{background:#fde68a!important;color:#9a3412!important}
+  html[data-theme="light"] .ctx-grid .cell-absent{background:#fce7f3;color:#9f1239}
+  html[data-theme="light"] .ctx-grid .cell-supervising{background:#ede9fe;color:#5b21b6}
+}
+</style>
+<!-- v4: console-only UI must never print (dialog + toasts live outside .shell,
+     which is what the original print rules hide) -->
+<style>
+@media print{
+  #v4-dialog-backdrop, #v4-toasts{display:none!important}
 }
 </style>
 </head>
