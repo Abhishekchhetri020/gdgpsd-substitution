@@ -714,6 +714,21 @@ body{font-family:'Poppins','Segoe UI',Arial,sans-serif;background:linear-gradien
   #v4-dialog .v4-dfoot{display:flex;justify-content:flex-end;gap:10px;padding:14px 22px;border-top:1px solid var(--v4-line)}
   .v4-btn{padding:9px 20px;border-radius:999px;font-size:.8rem;font-weight:700;cursor:pointer;font-family:inherit;border:0}
   .v4-btn.ok{background:linear-gradient(135deg,#f4e2b0,var(--v4-gold) 45%,#9a7a35);color:#14100a}
+  /* ── memo Doc bar (v4): persistent, left-aligned, survives later edits ── */
+  #memo-bar{display:flex;align-items:center;gap:14px;margin-top:12px;padding:13px 18px;border-radius:14px;
+    background:rgba(201,164,92,.08);border:1px solid rgba(201,164,92,.45);
+    box-shadow:0 10px 34px rgba(0,0,0,.35),0 0 28px rgba(201,164,92,.08);
+    animation:v4tin .35s cubic-bezier(.2,1.2,.4,1)}
+  html[data-theme="light"] #memo-bar{background:#fef9ec;box-shadow:0 10px 26px rgba(20,35,70,.12)}
+  #memo-bar .memo-open{display:inline-flex;align-items:center;gap:8px;text-decoration:none;font-weight:800;
+    font-size:.86rem;color:#14100a;padding:11px 22px;border-radius:999px;white-space:nowrap;
+    background:linear-gradient(135deg,#f4e2b0,var(--v4-gold) 45%,#9a7a35);
+    box-shadow:0 8px 26px rgba(201,164,92,.35)}
+  #memo-bar .memo-open:hover{transform:translateY(-1px)}
+  #memo-bar .memo-meta{font-size:.78rem;color:var(--v4-muted);line-height:1.5}
+  #memo-bar .memo-meta b{color:var(--v4-ink)}
+  #memo-bar .memo-x{margin-left:auto;background:none;border:0;color:var(--v4-faint);cursor:pointer;font-size:1rem}
+  #memo-bar .memo-x:hover{color:var(--v4-ink)}
   .v4-btn.no{background:transparent;color:var(--v4-muted);border:1px solid var(--v4-line)}
 
   /* ── acting class-teacher section (dark-only: base markup is light-designed) ── */
@@ -978,6 +993,7 @@ body{font-family:'Poppins','Segoe UI',Arial,sans-serif;background:linear-gradien
 </div>
 
 <div class="status-msg" id="status"></div>
+<div id="memo-bar" style="display:none"></div>
 </div>
 
 <!-- Print view (hidden on screen, shown only on print) -->
@@ -1308,6 +1324,7 @@ function onDateChange() {
   // Reset to empty before fetching to avoid leaking previous date's data visually
   state.absent = []; state.slots = []; state.actingCT = {};
   if (state.view) state.view.period = null;   // v4: drop period filter on date change
+  hideMemoBar();   // v4: Doc bar belongs to the previous date
   render();
   updateSavePill('saving', 'Loading draft…');
   const targetDate = state.date;
@@ -2840,6 +2857,23 @@ function autoFill() {
   setStatus('Auto-fill: ' + filled + ' confident matches assigned. ' + skipped + ' slots need manual review.' + actingMsg, 'success');
 }
 
+// ── memo Doc bar: persistent, left-aligned, survives later status updates ──
+function showMemoBar(url){
+  const bar = document.getElementById('memo-bar');
+  if (!bar || !url) return;
+  bar.innerHTML =
+    '<a class="memo-open" href="' + url + '" target="_blank">📄 Open Memo Doc →</a>' +
+    '<div class="memo-meta"><b>Memo Doc ready</b> · Substitution — ' + escapeHtml(state.date || '') + ' (' + escapeHtml(state.day || '') + ')<br>Opens in a new tab · stays here until a newer Doc replaces it</div>' +
+    '<button class="memo-x" onclick="hideMemoBar()" title="Dismiss">✕</button>';
+  bar.style.display = 'flex';
+}
+function hideMemoBar(){
+  const bar = document.getElementById('memo-bar');
+  if (!bar) return;
+  bar.style.display = 'none';
+  bar.innerHTML = '';
+}
+
 function publish(makeMemo) {
   // v4: any unexpected failure surfaces as a toast instead of a dead click
   try {
@@ -2875,6 +2909,7 @@ function publish(makeMemo) {
         makeMemo: !!makeMemo
       };
       setStatus((makeMemo ? 'Saving & generating Doc…' : 'Saving…') + (emailSubs ? ' (sending emails…)' : ''), '');
+      if (makeMemo) hideMemoBar();   // v4: stale bar clears; fresh one arrives on success
       google.script.run
         .withSuccessHandler(r => {
           const el = document.getElementById('status');
@@ -2882,13 +2917,7 @@ function publish(makeMemo) {
           let txt = '✓ Saved ' + r.savedRows + ' rows to Substitution Log.';
           if (r.emailedCount) txt += '  ✉ Emailed ' + r.emailedCount + ' substitute' + (r.emailedCount === 1 ? '' : 's') + '.';
           el.textContent = txt;
-          if (r.memoUrl) {
-            const a = document.createElement('a');
-            a.href = r.memoUrl; a.target = '_blank';
-            a.className = 'memo-link';
-            a.textContent = '📄 Open Memo Doc →';
-            el.appendChild(a);
-          }
+          if (r.memoUrl) showMemoBar(r.memoUrl);
           refreshWorkload();
         })
         .withFailureHandler(err => {
@@ -3004,7 +3033,7 @@ function clearAll() {
     'Clear all absent teachers and assignments? (This clears today\'s draft for everyone.)',
     '↺ Clear all',
     () => {
-      state.absent = []; state.slots = []; state.actingCT = {}; render(); scheduleAutoSave(); setStatus('', '');
+      state.absent = []; state.slots = []; state.actingCT = {}; hideMemoBar(); render(); scheduleAutoSave(); setStatus('', '');
     });
 }
 
