@@ -12,11 +12,11 @@ const LOGIN_AUDIT_TAB = 'Login History';
 const LONG_ABSENCE_TAB = 'Long Absences';   // v3.12 — multi-day absence
 const RESCHEDULE_RULES_TAB = 'Reschedule Rules';  // v3.13 — must-reschedule slots
 const PRINCIPAL_EMAIL = 'abhishekchhetri.gdgpsd@gmail.com';
-// v3.15.3 — substitution-email CC list. Always included on every substitute-duty email.
+// v3.15.3 — substitution-email CC list. Always included on every substitute-duty
+// email (and every acting-CT email). Per owner instruction: exactly Ms. Saroj
+// and Mr. Manoj — nobody else.
 const SUBSTITUTION_CC_EMAILS = [
-  'abhishekchhetri.gdgpsd@gmail.com',   // Mr. Abhishek (principal-bound)
   'saroj907@gmail.com',                  // Ms. Saroj
-  'principal@gdgoenkadarbhanga.in',      // Principal office
   'manojuro22@gmail.com',                // Mr. Manoj
 ].join(',');
 const SESSION_HOURS = 24;
