@@ -3228,7 +3228,7 @@ function v4RenderSlotTools(){
     pill('all') + pill('PENDING') + pill('FILLED') + pill('SUPERVISED') + pill('CANCELLED');
   document.getElementById('slot-q').addEventListener('input', e => { state.view.q = e.target.value; v4RenderSlotsOnly(); });
   document.getElementById('slot-sort').addEventListener('change', e => { state.view.sort = e.target.value; v4RenderSlotTools(); v4PaintSlotList(); });
-  box.querySelectorAll('[data-v4st]').forEach(b => b.addEventListener('click', () => { state.view.status = b.getAttribute('data-v4st'); v4RefreshExplorer(); v4PaintSlotList(); }));
+  box.querySelectorAll('[data-v4st]').forEach(b => b.addEventListener('click', () => { state.view.status = b.getAttribute('data-v4st'); state.view.period = null; v4RefreshExplorer(); v4PaintSlotList(); v4RenderCovStrip(); }));
   if (hadFocus) {
     const qi = document.getElementById('slot-q');
     qi.focus();
