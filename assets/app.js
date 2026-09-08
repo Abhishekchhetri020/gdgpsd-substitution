@@ -689,7 +689,7 @@ function initConstellation() {
   const ctx = cv.getContext('2d');
   if (!ctx) { document.body.classList.add('no-constellation'); return () => {}; }
 
-  const L1 = 'GD GOENKA', L2 = 'DARBHAANGA';
+  const L1 = 'GD GOENKA', L2 = 'DARBHANGA';
   let parts = [], orbiters = [], raf = 0, running = false, visible = true, t0 = 0;
   let mmx = -9999, mmy = -9999;
   let W = 0, H = 0;
