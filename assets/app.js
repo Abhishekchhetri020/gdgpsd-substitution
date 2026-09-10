@@ -2,9 +2,20 @@
 (() => {
 'use strict';
 
-const reducedMotion = window.matchMedia('(prefers-motion-reduce: reduce)').matches;
+const motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
+let reducedMotion = motionPreference.matches;
+let manualMotionPause = false;
+const motionStopped = () => reducedMotion || manualMotionPause || document.hidden;
+const emitMotionChange = () => {
+  document.documentElement.classList.toggle('motion-paused', reducedMotion || manualMotionPause);
+  window.dispatchEvent(new CustomEvent('gdg-motionchange'));
+};
+const onMotionPreferenceChange = event => { reducedMotion = event.matches; emitMotionChange(); };
+if (motionPreference.addEventListener) motionPreference.addEventListener('change', onMotionPreferenceChange);
+else if (motionPreference.addListener) motionPreference.addListener(onMotionPreferenceChange);
+document.addEventListener('visibilitychange', emitMotionChange);
 const finePointer = window.matchMedia('(pointer: fine)').matches;
-const DPR = () => Math.min(window.devicePixelRatio || 1, 2);
+const DPR = () => Math.min(window.devicePixelRatio || 1, window.innerWidth < 700 ? 1.35 : 1.75);
 const rand = (a, b) => a + Math.random() * (b - a);
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const TAU = Math.PI * 2;
@@ -48,9 +59,9 @@ const texCache = {}, cloudCache = {};
 /* photographic surfaces (NASA-grade maps, local files) with a procedural
    fallback that paints until the photo arrives — page never waits on them */
 const TEX_FILES = {
-  ember: 'jupitermap.jpg', ice: 'uranusmap.jpg', rock: 'mercurymap.jpg',
-  gold: 'venusmap.jpg', violet: 'neptunemap.jpg', giant: 'saturnmap.jpg',
-  earth: 'earth-blue-marble.jpg', mars: 'marsmap1k.jpg'
+  ember: 'jupitermap.webp', ice: 'uranusmap.webp', rock: 'mercurymap.webp',
+  gold: 'venusmap.webp', violet: 'neptunemap.webp', giant: 'saturnmap.webp',
+  earth: 'earth-blue-marble.webp', mars: 'marsmap1k.webp'
 };
 const texPhotos = {};
 function photoTexture(type) {
@@ -315,7 +326,7 @@ function initGalaxy() {
 
   let W = 0, H = 0;
   let stars = [], band = [], sprinkle = [], lanes = [], nebs = [], brights = [], streams = [];
-  let sprites = null, shiva = null;
+  let sprites = null;
   let meteors = [], rings = [];
   let mx = 0, my = 0, tmx = 0, tmy = 0;
   let panX = 0, panY = 0, panTX = 0, panTY = 0;
@@ -327,25 +338,7 @@ function initGalaxy() {
 
   /* ---- pre-rendered deep-sky bodies ---- */
   function buildSprites() {
-    const m = Math.min(W, H);
-    /* (giant planet is drawn live each frame via drawOrbiter — see draw() below) */
-
-    /* (Mars is drawn live each frame as a 3D globe — see draw() below) */
-
-    /* (top-left now hosts a living 3D Earth — drawn per frame below) */
-
     sprites = {};
-    buildShiva();
-  }
-
-  /* Mahadev's presence — Adiyogi at night, tightly cropped to the face
-     (Rajdweep nlb, CC BY-SA 4.0, via Wikimedia Commons; cropped + graded).
-     Loaded async; the sky simply appears without him until he arrives. */
-  function buildShiva() {
-    const img = new Image();
-    img.onload = () => { shiva = img; };
-    img.onerror = () => { shiva = null; };
-    img.src = 'assets/shiva.png';
   }
 
   function build() {
@@ -355,7 +348,7 @@ function initGalaxy() {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     const area = W * H;
-    const n = Math.round(clamp(area / 4200, 260, 700));
+    const n = Math.round(clamp(area / 6200, 170, 430));
     stars = [];
     for (let i = 0; i < n; i++) {
       const depth = Math.random() < 0.55 ? 0.3 : (Math.random() < 0.6 ? 0.6 : 1);
@@ -371,7 +364,7 @@ function initGalaxy() {
     const ax = Math.cos(BAND_ANG), ay = Math.sin(BAND_ANG);
     const cx = W * 0.5, cy = H * 0.40, bw = Math.min(W, H) * 0.16;
     band = [];
-    for (let i = 0; i < 520; i++) {
+    for (let i = 0; i < (W < 700 ? 230 : 340); i++) {
       const t = rand(-0.55, 0.55) * diag, off = gauss() * bw;
       band.push({
         x: cx + ax * t - ay * off, y: cy + ay * t + ax * off,
@@ -381,7 +374,7 @@ function initGalaxy() {
       });
     }
     lanes = [];
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < 6; i++) {
       lanes.push({
         t: rand(-0.4, 0.4) * diag, off: gauss() * bw * 0.35,
         rx: rand(90, 260), ry: rand(14, 34),
@@ -389,7 +382,7 @@ function initGalaxy() {
       });
     }
     sprinkle = [];
-    for (let i = 0; i < 130; i++) {
+    for (let i = 0; i < (W < 700 ? 54 : 82); i++) {
       const t = rand(-0.5, 0.5) * diag, off = gauss() * bw * 1.4;
       sprinkle.push({
         x: cx + ax * t - ay * off, y: cy + ay * t + ax * off,
@@ -398,7 +391,7 @@ function initGalaxy() {
       });
     }
     brights = [];
-    for (let i = 0; i < 16; i++) {
+    for (let i = 0; i < (W < 700 ? 7 : 11); i++) {
       brights.push({
         x: Math.random() * W, y: Math.random() * H,
         r: rand(1.8, 3.1), spike: rand(22, 64),
@@ -457,18 +450,6 @@ function initGalaxy() {
 
   function draw(t, dt, scrollY) {
     ctx.clearRect(0, 0, W, H);
-    // Mahadev's presence — vast, faint, breathing; dissolves as you scroll
-    const heroF = clamp(1 - scrollY / (H * 0.85), 0, 1);
-    if (shiva && shiva.complete && shiva.naturalWidth && heroF > 0.01) {
-      const SW = Math.min(W, H) * 1.35;
-      const SH = SW * (shiva.naturalHeight / shiva.naturalWidth);
-      const bx = W * 0.5 - SW / 2 + (mx * 10 + panX) * 0.12;
-      const by = H * 0.48 - SH / 2 + (my * 8 + panY) * 0.12;
-      ctx.save();
-      ctx.globalAlpha = (0.10 + 0.03 * Math.sin(t * 0.3)) * heroF;
-      ctx.drawImage(shiva, bx, by, SW, SH);
-      ctx.restore();
-    }
     mx += (tmx - mx) * 0.04; my += (tmy - my) * 0.04;
     if (!dragging) { panTX *= 0.96; panTY *= 0.96; }
     panX += (panTX - panX) * 0.08; panY += (panTY - panY) * 0.08;
@@ -544,14 +525,14 @@ function initGalaxy() {
     if (sprites) {
       const fl = (f, a) => Math.sin(t * f + a) * 9;
       // giant planet, fully live: occluded rings, travelling glint, mouse spin
-      const PR = clamp(m * 0.15, 75, 150);
-      drawOrbiter(ctx, 0.87 * W + ox * 0.4 + fl(0.10, 1), 0.20 * H + fl(0.13, 2), PR, 'giant', t, 7.7, 1, planetSpin);
-      // living 3D Earth, top-left — continents, clouds and ice ride the spin
-      const ER = clamp(m * 0.09, 50, 100);
-      drawOrbiter(ctx, 0.15 * W + ox * 0.3, 0.22 * H + fl(0.08, 4), ER, 'earth', t, 3.1, 0.95, t * 0.05 + planetSpin * 0.5);
-      // Mars, lower-left — rusted 3D globe turning with your drag
-      const MR = clamp(m * 0.055, 30, 60);
-      drawOrbiter(ctx, 0.09 * W + ox * 0.6 + fl(0.07, 0), 0.70 * H + fl(0.09, 3), MR, 'mars', t, 5.2, 0.95, t * 0.03 + planetSpin);
+      const mobile = W < 700;
+      const PR = clamp(m * (mobile ? 0.12 : 0.15), 62, 150);
+      drawOrbiter(ctx, (mobile ? 0.91 : 0.87) * W + ox * 0.4 + fl(0.10, 1), 0.20 * H + fl(0.13, 2), PR, 'giant', t, 7.7, mobile ? 0.5 : 0.82, planetSpin);
+      // Keep the smaller bodies outside the hero copy's primary reading zone.
+      const ER = clamp(m * (mobile ? 0.055 : 0.065), 24, 72);
+      drawOrbiter(ctx, (mobile ? 0.04 : 0.43) * W + ox * 0.3, (mobile ? 0.34 : 0.18) * H + fl(0.08, 4), ER, 'earth', t, 3.1, mobile ? 0.28 : 0.58, t * 0.05 + planetSpin * 0.5);
+      const MR = clamp(m * 0.045, 24, 48);
+      drawOrbiter(ctx, (mobile ? 0.03 : 0.035) * W + ox * 0.6 + fl(0.07, 0), 0.76 * H + fl(0.09, 3), MR, 'mars', t, 5.2, mobile ? 0.3 : 0.56, t * 0.03 + planetSpin);
     }
 
     const streak = Math.min(46, Math.abs(scrollVel) * 0.09);
@@ -597,7 +578,7 @@ function initGalaxy() {
       ctx.beginPath(); ctx.arc(x, y, s.r, 0, TAU); ctx.fill();
     }
 
-    if (!reducedMotion && dt > 0) {
+    if (!motionStopped() && dt > 0) {
       if ((t - lastSpawn > rand(3.5, 8) && meteors.length < 3) || (Math.abs(scrollVel) > 14 && meteors.length < 4 && Math.random() < 0.1))
         spawnMeteor(t);
     }
@@ -625,21 +606,28 @@ function initGalaxy() {
   }
 
   build();
-  if (reducedMotion) { draw(2.3, 0, window.scrollY || 0); }
-  else {
-    let last = performance.now(), rT = 0;
-    const loop = now => {
-      const dt = clamp((now - last) / 1000, 0, 0.05); last = now;
-      rT += dt;
-      draw(rT, dt, window.scrollY || 0);
-      requestAnimationFrame(loop);
-    };
-    requestAnimationFrame(loop);
-  }
+  let galaxyRaf = 0, last = performance.now(), lastFrame = 0, rT = 0;
+  const loop = now => {
+    if (motionStopped()) { galaxyRaf = 0; draw(rT || 2.3, 0, window.scrollY || 0); return; }
+    const frameGap = (window.scrollY || 0) > H * 0.72 ? 42 : 0;
+    if (frameGap && now - lastFrame < frameGap) { galaxyRaf = requestAnimationFrame(loop); return; }
+    const dt = clamp((now - last) / 1000, 0, 0.05);
+    last = now; lastFrame = now; rT += dt;
+    draw(rT, dt, window.scrollY || 0);
+    galaxyRaf = requestAnimationFrame(loop);
+  };
+  const syncGalaxyMotion = () => {
+    cancelAnimationFrame(galaxyRaf);
+    if (motionStopped()) { galaxyRaf = 0; draw(rT || 2.3, 0, window.scrollY || 0); }
+    else { last = performance.now(); galaxyRaf = requestAnimationFrame(loop); }
+  };
+  window.addEventListener('gdg-motionchange', syncGalaxyMotion);
+  syncGalaxyMotion();
 
   /* ---- interactivity: parallax, drag-pan, click meteors ---- */
   const interactive = el => !(el && el.closest && el.closest('a,button,.card,.demo-shell,input,select,textarea,iframe'));
   window.addEventListener('pointermove', e => {
+    if (motionStopped()) return;
     tmx = (e.clientX / window.innerWidth - 0.5) * 2;
     tmy = (e.clientY / window.innerHeight - 0.5) * 2;
     if (dragging) {
@@ -659,7 +647,7 @@ function initGalaxy() {
     lastPX = e.clientX; lastPY = e.clientY;
   }, { passive: true });
   window.addEventListener('pointerup', e => {
-    if (dragging && moved < 6 && interactive(e.target) && !reducedMotion) {
+    if (dragging && moved < 6 && interactive(e.target) && !motionStopped()) {
       spawnMeteor(performance.now() / 1000, e.clientX, e.clientY, 0.7);
       if (rings.length < 5) rings.push({ x: e.clientX, y: e.clientY, life: 0, max: 0.7 });
     }
@@ -674,7 +662,7 @@ function initGalaxy() {
   let rsz;
   window.addEventListener('resize', () => {
     clearTimeout(rsz);
-    rsz = setTimeout(() => { build(); if (reducedMotion) draw(2.3, 0, window.scrollY || 0); }, 200);
+    rsz = setTimeout(() => { build(); if (motionStopped()) draw(rT || 2.3, 0, window.scrollY || 0); }, 200);
   }, { passive: true });
 }
 
@@ -704,7 +692,7 @@ function initConstellation() {
     o.fillStyle = '#fff'; o.textAlign = 'center'; o.textBaseline = 'alphabetic';
     try { o.letterSpacing = '6px'; } catch (e) {}
     const s = Math.min(w * 0.105, 140);   // both lines, one size
-    o.font = `700 ${s}px "Space Grotesk", Inter, Arial, sans-serif`;
+    o.font = `700 ${s}px Sora, Manrope, Arial, sans-serif`;
     const y1 = h * 0.5 - s * 0.42;
     o.fillText(L1, w / 2, y1);
     try { o.letterSpacing = '12px'; } catch (e) {}
@@ -761,8 +749,8 @@ function initConstellation() {
       const [sx, sy] = scatterStart(i % 4, W, H);
       return {
         sx, sy, tx, ty,
-        delay: (i / pts.length) * 0.9 + rand(0, 0.35),
-        dur: rand(1.2, 2.1),
+        delay: (i / pts.length) * 0.32 + rand(0, 0.12),
+        dur: rand(0.78, 1.2),
         size: rand(0.9, 2.5), col,
         tw: rand(1, 3.2), ph: Math.random() * TAU,
         done: false
@@ -778,7 +766,7 @@ function initConstellation() {
     const el = (now - t0) / 1000;
     const t = now / 1000;
     ctx.clearRect(0, 0, W, H);
-    const orbitA = clamp((el - 3.4) / 2.2, 0, 1);
+    const orbitA = clamp((el - 1.15) / 0.75, 0, 1);
 
     if (orbitA > 0.01) {
       ctx.save();
@@ -859,14 +847,14 @@ function initConstellation() {
         }
       }
     }
-    if (visible) raf = requestAnimationFrame(frame);
+    if (visible && !motionStopped()) raf = requestAnimationFrame(frame);
     else running = false;
   }
 
   function play() {
     cancelAnimationFrame(raf);
     if (!build()) return;
-    if (reducedMotion) {
+    if (motionStopped()) {
       ctx.clearRect(0, 0, W, H);
       ctx.save();
       ctx.strokeStyle = 'rgba(201,164,92,0.16)';
@@ -896,11 +884,12 @@ function initConstellation() {
     new IntersectionObserver(es => {
       es.forEach(en => {
         visible = en.isIntersecting;
-        if (visible && !running && parts.length && !reducedMotion) { running = true; raf = requestAnimationFrame(frame); }
+        if (visible && !running && parts.length && !motionStopped()) { running = true; raf = requestAnimationFrame(frame); }
       });
     }, { threshold: 0.05 }).observe(wrapEl);
   }
   wrapEl.addEventListener('pointermove', e => {
+    if (motionStopped()) return;
     const r = cv.getBoundingClientRect();
     mmx = e.clientX - r.left; mmy = e.clientY - r.top;
   }, { passive: true });
@@ -908,6 +897,7 @@ function initConstellation() {
 
   let rsz;
   window.addEventListener('resize', () => { clearTimeout(rsz); rsz = setTimeout(play, 250); }, { passive: true });
+  window.addEventListener('gdg-motionchange', play);
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => play()).catch(() => {});
   play();
   return play;
@@ -925,6 +915,7 @@ function initUI(replayFn) {
     requestAnimationFrame(() => {
       const y = window.scrollY || 0;
       if (nav) nav.classList.toggle('scrolled', y > 30);
+      document.documentElement.classList.toggle('content-mode', y > window.innerHeight * 0.62);
       if (prog) {
         const max = document.documentElement.scrollHeight - window.innerHeight;
         prog.style.width = (max > 0 ? (y / max) * 100 : 0) + '%';
@@ -941,6 +932,20 @@ function initUI(replayFn) {
     }, { threshold: 0.12 });
     document.querySelectorAll('.reveal').forEach(el => io.observe(el));
   } else document.querySelectorAll('.reveal').forEach(el => el.classList.add('in'));
+
+  const sectionLinks = Array.from(document.querySelectorAll('.nav-links a[href^="#"]'));
+  const sections = sectionLinks.map(link => document.querySelector(link.getAttribute('href'))).filter(Boolean);
+  if ('IntersectionObserver' in window && sections.length) {
+    const sectionObserver = new IntersectionObserver(entries => {
+      entries.forEach(entry => {
+        if (!entry.isIntersecting) return;
+        sectionLinks.forEach(link => link.removeAttribute('aria-current'));
+        const active = sectionLinks.find(link => link.getAttribute('href') === '#' + entry.target.id);
+        if (active) active.setAttribute('aria-current', 'true');
+      });
+    }, { rootMargin: '-25% 0px -60% 0px', threshold: 0 });
+    sections.forEach(section => sectionObserver.observe(section));
+  }
 
   const counters = document.querySelectorAll('[data-count]');
   const runCounter = el => {
@@ -977,6 +982,32 @@ function initUI(replayFn) {
   const replay = document.getElementById('replay');
   if (replay && replayFn) replay.addEventListener('click', replayFn);
 
+  const motionToggle = document.getElementById('motion-toggle');
+  const syncMotionButton = () => {
+    if (!motionToggle) return;
+    const paused = reducedMotion || manualMotionPause;
+    motionToggle.setAttribute('aria-pressed', String(paused));
+    motionToggle.textContent = paused ? 'Resume motion' : 'Pause motion';
+    motionToggle.disabled = reducedMotion;
+    if (reducedMotion) motionToggle.textContent = 'Motion reduced';
+  };
+  if (motionToggle) {
+    motionToggle.addEventListener('click', () => {
+      manualMotionPause = !manualMotionPause;
+      emitMotionChange();
+      syncMotionButton();
+    });
+    window.addEventListener('gdg-motionchange', syncMotionButton);
+    syncMotionButton();
+  }
+
+  document.querySelectorAll('.mobile-menu-panel a').forEach(link => {
+    link.addEventListener('click', () => {
+      const menu = link.closest('details');
+      if (menu) menu.open = false;
+    });
+  });
+
   const yr = document.getElementById('yr');
   if (yr) yr.textContent = new Date().getFullYear();
 
@@ -985,21 +1016,24 @@ function initUI(replayFn) {
 
 /* ---------- animated product mock (theatre, no real data) ---------- */
 function initDemo() {
-  const root = document.getElementById('demo');
+  const root = document.getElementById('demo-preview');
   if (!root) return;
   const typeEl = document.getElementById('demo-type');
   const chipsEl = document.getElementById('demo-chips');
+  const statusEl = document.getElementById('demo-status');
+  const replay = document.getElementById('demo-replay');
   const slots = Array.from(root.querySelectorAll('.slot-row'));
   const bars = Array.from(root.querySelectorAll('.wload-bar i'));
   const NAME = 'Ms. Sharma';
   const SUBS = ['Mr. Verma', 'Ms. Iyer', 'Mr. Khan'];
   const WIDTHS = ['72%', '46%', '31%'];
-  let timers = [], alive = false, started = false;
+  let timers = [], alive = false, started = false, visible = false;
 
   function later(fn, ms) { timers.push(setTimeout(fn, ms)); }
   function clear() { timers.forEach(clearTimeout); timers = []; }
 
   function reset() {
+    if (statusEl) statusEl.textContent = "Reading today's absences";
     if (typeEl) typeEl.innerHTML = '<span class="caret"></span>';
     if (chipsEl) chipsEl.innerHTML = '';
     slots.forEach(s => {
@@ -1010,6 +1044,7 @@ function initDemo() {
   }
 
   function final() {
+    if (statusEl) statusEl.textContent = 'Plan balanced · memo ready';
     if (typeEl) typeEl.textContent = NAME;
     if (chipsEl) chipsEl.innerHTML = `<span class="fchip">${NAME} <span>✕</span></span>`;
     slots.forEach((s, i) => {
@@ -1021,7 +1056,8 @@ function initDemo() {
 
   function play() {
     clear(); reset();
-    if (reducedMotion) { final(); return; }
+    if (motionStopped()) { final(); return; }
+    alive = true;
     let t = 600;
     const chars = NAME.split('');
     chars.forEach((ch, i) => later(() => {
@@ -1031,18 +1067,20 @@ function initDemo() {
     t += chars.length * 70 + 350;
     later(() => {
       if (!alive || !chipsEl) return;
+      if (statusEl) statusEl.textContent = 'Ms. Sharma marked absent · 3 periods open';
       chipsEl.innerHTML = `<span class="fchip">${NAME} <span>✕</span></span>`;
       if (typeEl) typeEl.innerHTML = '<span style="color:#6b7280">Type a teacher\'s name…</span><span class="caret"></span>';
     }, t);
     t += 700;
     slots.forEach((s, i) => later(() => {
       if (!alive) return;
+      if (statusEl) statusEl.textContent = `Balancing assignment ${i + 1} of ${slots.length}`;
       s.classList.add('done');
       const w = s.querySelector('.who'); if (w && SUBS[i]) w.textContent = SUBS[i];
       if (bars[i] && WIDTHS[i]) bars[i].style.width = WIDTHS[i];
     }, t + i * 650));
-    t += slots.length * 650 + 2600;
-    later(() => { if (alive) play(); }, t);
+    t += slots.length * 650 + 350;
+    later(() => { if (alive) { final(); alive = false; } }, t);
   }
 
   function stop() { alive = false; clear(); }
@@ -1050,12 +1088,18 @@ function initDemo() {
   if ('IntersectionObserver' in window) {
     new IntersectionObserver(es => {
       es.forEach(en => {
-        if (en.isIntersecting && !started) { started = true; alive = true; play(); }
-        else if (en.isIntersecting && !alive) { alive = true; play(); }
-        else if (!en.isIntersecting && alive) stop();
+        visible = en.isIntersecting;
+        if (visible && !started) { started = true; play(); }
+        else if (!visible && alive) stop();
       });
     }, { threshold: 0.25 }).observe(root);
-  } else { alive = true; play(); }
+  } else { visible = true; started = true; play(); }
+
+  if (replay) replay.addEventListener('click', play);
+  window.addEventListener('gdg-motionchange', () => {
+    if (motionStopped()) { stop(); final(); }
+    else if (visible) play();
+  });
 }
 
 document.addEventListener('DOMContentLoaded', () => {

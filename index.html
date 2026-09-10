@@ -8,11 +8,13 @@
 <link rel="icon" href="data:,">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Sora:wght@500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/styles.css">
 <noscript><style>#constellation,.replay,.scroll-cue{display:none}.hero-fallback{display:flex}.reveal{opacity:1;transform:none}</style></noscript>
 </head>
 <body>
+
+<a class="skip-link" href="#main-content">Skip to main content</a>
 
 <canvas id="galaxy" aria-hidden="true"></canvas>
 <div class="vignette" aria-hidden="true"></div>
@@ -25,8 +27,8 @@
   <nav class="nav">
     <div class="nav-inner">
       <a class="brand" href="#top" aria-label="GDGPSD home">
-        <span class="brand-mark">G</span>
-        <span>GDGPSD<small>G.D. GOENKA · DARBHANGA</small></span>
+        <span class="brand-mark" aria-hidden="true">G</span>
+        <span class="brand-copy">GDGPSD<small>G.D. GOENKA · DARBHANGA</small></span>
       </a>
       <div class="nav-links">
         <a href="#capabilities">Capabilities</a>
@@ -34,76 +36,99 @@
         <a href="#how">How it works</a>
         <a href="#fairness">Fairness</a>
       </div>
-      <a class="btn btn-gold btn-sm" style="margin-left:28px" href="planner.html">Login</a>
+      <details class="mobile-menu">
+        <summary aria-label="Open section navigation">Menu</summary>
+        <div class="mobile-menu-panel">
+          <a href="#capabilities">Capabilities</a>
+          <a href="#demo">Live preview</a>
+          <a href="#how">How it works</a>
+          <a href="#fairness">Fairness</a>
+        </div>
+      </details>
+      <a class="btn btn-gold btn-sm nav-login" href="planner.html">Login</a>
     </div>
   </nav>
 
+  <main id="main-content">
   <!-- HERO -->
   <header class="hero" id="top">
-    <div class="hero-badge"><span class="pulse"></span>G.D. GOENKA SCHOOL · DARBHANGA</div>
+    <div class="hero-grid">
+      <div class="hero-copy">
+        <h1>Fair cover periods.<span>Ready before the bell.</span></h1>
+        <p class="hero-sub">Turn today's absences into a complete, balanced substitution plan, then publish one memo for the whole school.</p>
 
-    <div class="constellation-wrap" role="img" aria-label="A constellation of stars forming the words GD Goenka Darbhanga">
-      <canvas id="constellation"></canvas>
-      <div class="hero-fallback">
-        <h1>GD GOENKA</h1>
-        <p>DARBHANGA</p>
+        <div class="btn-row">
+          <a class="btn btn-gold" href="planner.html">Open Planner</a>
+          <a class="btn btn-ghost" href="#demo">Watch the live preview</a>
+        </div>
+        <p class="hero-hint"><span aria-hidden="true">●</span> Authorised staff · 24-hour sessions · every change logged</p>
+
+        <ul class="hero-chips" aria-label="Planner highlights">
+          <li class="hchip">Smart auto-fill</li>
+          <li class="hchip">7-day fairness</li>
+          <li class="hchip">Print-ready memo</li>
+        </ul>
+      </div>
+
+      <div class="hero-visual">
+        <p class="hero-school">G.D. GOENKA SCHOOL · DARBHANGA</p>
+        <div class="constellation-wrap" role="img" aria-label="Stars forming the words GD Goenka Darbhanga">
+          <canvas id="constellation"></canvas>
+          <div class="hero-fallback" aria-hidden="true">
+            <strong>GD GOENKA</strong>
+            <span>DARBHANGA</span>
+          </div>
+        </div>
+
+        <div class="handoff-card" aria-label="Example morning status">
+          <span class="handoff-time">07:20 AM</span>
+          <span><b>3</b> open periods</span>
+          <span><b>3</b> fair assignments</span>
+          <span class="handoff-ready">Memo ready</span>
+        </div>
+
+        <div class="motion-controls" aria-label="Animation controls">
+          <button class="replay" id="replay" type="button">Replay formation</button>
+          <button class="motion-toggle" id="motion-toggle" type="button" aria-pressed="false">Pause motion</button>
+        </div>
       </div>
     </div>
 
-    <p class="hero-sub"><b>Substitution Planner</b> — a new standard for cover periods.<br>
-      Mark absences, auto-fill fair substitutions, publish memos. In minutes, not mornings.</p>
-
-    <div class="btn-row">
-      <a class="btn btn-gold" href="planner.html">Login</a>
-      <a class="btn btn-ghost" href="#capabilities">See how it works</a>
-    </div>
-    <div class="hero-hint">🔒 ADMIN SIGN-IN INSIDE THE PLANNER</div>
-
-    <div class="hero-chips">
-      <span class="hchip"><b>⚡</b>Smart Auto-fill</span>
-      <span class="hchip"><b>◈</b>Fair workload</span>
-      <span class="hchip"><b>✦</b>Print memo + Google Doc</span>
-      <span class="hchip"><b>✧</b>Acting CT · Long absence</span>
-    </div>
-
-    <button class="replay" id="replay" title="Replay the star formation">✦ REPLAY FORMATION</button>
-    <a class="scroll-cue" href="#capabilities">SCROLL</a>
+    <a class="scroll-cue" href="#capabilities">Explore the workflow</a>
   </header>
 
-  <!-- MARQUEE -->
-  <div class="marquee" aria-hidden="true">
-    <div class="marquee-track" id="marquee-track">
-      <span><i>✦</i>SMART AUTO-FILL</span><span><i>✦</i>FAIR WORKLOAD</span><span><i>✦</i>PRINT MEMO</span><span><i>✦</i>ACTING CLASS TEACHERS</span><span><i>✦</i>LONG ABSENCE</span><span><i>✦</i>XML TIMETABLE REFRESH</span>
-    </div>
+  <div class="proof-strip" aria-label="Planner workflow summary">
+    <span>Reads the live timetable</span>
+    <span>Balances the seven-day workload</span>
+    <span>Publishes one clear memo</span>
   </div>
 
   <!-- CAPABILITIES -->
   <section class="section" id="capabilities">
-    <div class="reveal"><div class="kicker">CAPABILITIES</div></div>
-    <h2 class="h2 reveal">Everything a chaotic morning needs, <em>in one dark console.</em></h2>
-    <p class="lede reveal d1">Built for the principal's office — the planner reads your live timetable, respects who is free, who is overloaded, and who should never be touched, then writes the day's plan for you.</p>
+    <h2 class="h2 reveal">Everything a chaotic morning needs—<em>in one calm console.</em></h2>
+    <p class="lede reveal d1">Built for the principal's office: the planner reads your live timetable, respects who is free, who is overloaded, and who should never be touched, then writes the day's plan for you.</p>
 
     <div class="grid4">
       <div class="card reveal">
-        <span class="ico">⚡</span>
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 4.8 13h6.3L10 22l9.2-12H13z"/></svg>
         <h3>Smart Auto-fill</h3>
-        <p>One click fills every open period — subject-matched, co-teacher aware, mother-teacher protected, duty-safe. You review, not hunt.</p>
+        <p>One click fills every open period: subject-matched, co-teacher aware, mother-teacher protected and duty-safe. You review, not hunt.</p>
         <span class="tag">ONE-CLICK DAY</span>
       </div>
       <div class="card reveal d1">
-        <span class="ico">◈</span>
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 12l8 9 8-9z"/><path d="M8 12h8"/></svg>
         <h3>Fairness engine</h3>
         <p>Live 7-day workload ledger steers covers to the least-loaded free teacher. No more same-face-every-day substitutions.</p>
         <span class="tag">7-DAY LEDGER</span>
       </div>
       <div class="card reveal d2">
-        <span class="ico">✦</span>
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h8l3 3v15H7z"/><path d="M15 3v4h4M10 12h5M10 16h5"/></svg>
         <h3>Memos that print</h3>
-        <p>One page, school header, period table, summary, signature line — plus a Google Doc and per-teacher duty emails with CC to the office.</p>
+        <p>One page, school header, period table, summary and signature line, plus a Google Doc and per-teacher duty emails with CC to the office.</p>
         <span class="tag">PRINT · DOC · MAIL</span>
       </div>
       <div class="card reveal d3">
-        <span class="ico">✧</span>
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 6v5c0 5 3.4 8.5 8 10 4.6-1.5 8-5 8-10V6z"/><path d="m9 12 2 2 4-5"/></svg>
         <h3>Admin control</h3>
         <p>Acting class teachers, multi-day long absences, reschedule-don't-substitute rules, and in-app XML timetable refresh with diff preview.</p>
         <span class="tag">FULL CONTROL</span>
@@ -113,16 +138,19 @@
 
   <!-- DEMO -->
   <section class="section" id="demo">
-    <div class="reveal"><div class="kicker">LIVE FEEL</div></div>
     <h2 class="h2 reveal">Watch a morning <em>resolve itself.</em></h2>
-    <p class="lede reveal d1">A dramatised preview of the planner console — the real app runs on your live timetable data.</p>
+    <p class="lede reveal d1">A guided preview using illustrative names and classes. The real planner works with the school's live timetable.</p>
 
-    <div class="demo-shell reveal d1" id="demo">
+    <figure class="demo-shell reveal d1" id="demo-preview" aria-labelledby="demo-caption">
       <div class="demo-bar">
         <span class="dot" style="background:#ff5f57"></span><span class="dot" style="background:#febc2e"></span><span class="dot" style="background:#28c840"></span>
-        <span class="url">gdgpsd-substitution · planner console</span>
+        <span class="url">Illustrative planner walkthrough</span>
+        <span class="demo-clock">07:20 AM</span>
       </div>
-      <div class="demo-body">
+      <div class="demo-stage" aria-hidden="true">
+        <div class="demo-status"><span class="demo-status-dot"></span><span id="demo-status">Reading today's absences</span></div>
+      </div>
+      <div class="demo-body" aria-hidden="true">
         <div class="demo-left">
           <div class="demo-label">ABSENT TEACHERS</div>
           <div class="fake-input"><span id="demo-type"><span class="caret"></span></span></div>
@@ -133,22 +161,23 @@
           <div class="slot-row"><span class="p">P6</span><span>VII C · English</span><span class="who">Pending</span></div>
         </div>
         <div class="demo-right">
-          <div class="demo-label">WORKLOAD — TODAY + 7 DAYS</div>
+          <div class="demo-label">WORKLOAD · TODAY + 7 DAYS</div>
           <div class="wload-row"><span>Mr. Verma</span><b>2</b></div><div class="wload-bar"><i></i></div>
           <div class="wload-row"><span>Ms. Iyer</span><b>1</b></div><div class="wload-bar"><i></i></div>
           <div class="wload-row"><span>Mr. Khan</span><b>0</b></div><div class="wload-bar"><i></i></div>
-          <p class="demo-note">The fairness engine prefers the least-loaded free teacher for each slot — watch the quietest row get picked first.</p>
+          <p class="demo-note">The fairness engine prefers the least-loaded free teacher for each slot. Watch the quietest row get picked first.</p>
         </div>
       </div>
-    </div>
+      <figcaption id="demo-caption">Animated example: Ms. Sharma is marked absent, three open periods receive fair substitute assignments, and the workload ledger updates.</figcaption>
+      <button class="demo-replay" id="demo-replay" type="button">Replay walkthrough</button>
+    </figure>
   </section>
 
   <!-- HOW -->
   <section class="section" id="how">
-    <div class="reveal"><div class="kicker">WORKFLOW</div></div>
     <h2 class="h2 reveal">Four steps. <em>Zero chaos.</em></h2>
     <div class="steps">
-      <div class="step reveal"><div class="n">01</div><h3>Pick the date</h3><p>Yesterday's draft, today's plan — step across school days with one tap.</p></div>
+      <div class="step reveal"><div class="n">01</div><h3>Pick the date</h3><p>Yesterday's draft, today's plan. Step across school days with one tap.</p></div>
       <div class="step reveal d1"><div class="n">02</div><h3>Mark absences</h3><p>Type-ahead chips, browse-all picker, or multi-day long absence in one go.</p></div>
       <div class="step reveal d2"><div class="n">03</div><h3>Auto-fill fair</h3><p>Smart Auto-fill assigns every period, balancing the 7-day load as it goes.</p></div>
       <div class="step reveal d3"><div class="n">04</div><h3>Publish &amp; memo</h3><p>Save the draft, email every substitute, print the one-page memo.</p></div>
@@ -157,9 +186,8 @@
 
   <!-- FAIRNESS -->
   <section class="section" id="fairness">
-    <div class="reveal"><div class="kicker">WHY IT MATTERS</div></div>
     <h2 class="h2 reveal">Fairness you can <em>count.</em></h2>
-    <p class="lede reveal d1">Illustrative counters — connect them to your Substitution Log any morning and watch the same story.</p>
+    <p class="lede reveal d1">These illustrative counters mirror what the Substitution Log can show on any morning.</p>
     <div class="stats">
       <div class="stat reveal"><div class="num" data-count="8" data-suffix="">0</div><div class="lbl">periods a day, auto-assigned in seconds</div></div>
       <div class="stat reveal d1"><div class="num" data-count="100" data-suffix="%">0</div><div class="lbl">of slots resolved — filled, supervised or formally cancelled</div></div>
@@ -167,9 +195,9 @@
       <div class="stat reveal d3"><div class="num" data-count="1" data-suffix="">0</div><div class="lbl">one-page memo the whole school reads</div></div>
     </div>
 
-    <div class="quote reveal">
-      <blockquote>“Mornings used to be a scramble of registers and phone calls. <span>Now the day's cover plan writes itself — fairly.</span>”</blockquote>
-      <cite>— PRINCIPAL'S OFFICE, G.D. GOENKA SCHOOL, DARBHANGA</cite>
+    <div class="evidence-panel reveal">
+      <p>Every open period stays visible until it is <strong>filled, supervised or formally cancelled.</strong></p>
+      <span>The result is one reviewable plan, not a trail of registers, calls and separate messages.</span>
     </div>
   </section>
 
@@ -183,26 +211,21 @@
       </div>
     </div>
   </div>
+  </main>
 
   <!-- FOOTER -->
   <footer>
     <div class="foot-inner">
-      <a class="brand" href="#top" style="font-size:.82rem"><span class="brand-mark" style="width:28px;height:28px;font-size:.68rem">G</span>GDGPSD</a>
+      <a class="brand foot-brand" href="#top"><span class="brand-mark" aria-hidden="true">G</span>GDGPSD</a>
       <span>G.D. Goenka School, Darbhanga · Substitution Planner</span>
       <span class="spacer"></span>
       <a href="planner.html">Login</a>
-      <span>Adiyogi photo: <a href="https://commons.wikimedia.org/wiki/File:Adiyogi_Shiva_statue_night.jpg">Rajdweep nlb</a> · <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a> (cropped, graded)</span>
       <span>© <span id="yr">2026</span> · Admin use only</span>
     </div>
   </footer>
 
 </div><!-- /page -->
 
-<script>
-  // duplicate marquee content for a seamless loop
-  document.getElementById('marquee-track').innerHTML +=
-    document.getElementById('marquee-track').innerHTML;
-</script>
 <script src="assets/app.js" defer></script>
 </body>
 </html>
