@@ -167,6 +167,7 @@ function loadWeeklyLoad() {
   // Pass 1: read Daily Drafts. For each past-7-days date with a draft, count FILLED
   // substitutions from its slots JSON. Record which dates are covered by drafts.
   const weekly = {};
+  const lastAssigned = {};
   const draftDates = {};
   const draftsSh = ss.getSheetByName(DRAFTS_TAB);
   if (draftsSh && draftsSh.getLastRow() > 1) {
@@ -180,9 +181,16 @@ function loadWeeklyLoad() {
       let slots = [];
       try { slots = JSON.parse(draftData[i][5] || '[]'); } catch (e) { continue; }
       draftDates[dateStr] = true;
+      const countedDuties = new Set();
       for (const s of slots) {
         if ((s.status === 'FILLED' || s.status === 'SUPERVISED') && s.substitute) {
+          const dutyKey = s.substitute + '|' + s.period;
+          if (countedDuties.has(dutyKey)) continue; // merged classes = one teacher duty
+          countedDuties.add(dutyKey);
           weekly[s.substitute] = (weekly[s.substitute] || 0) + 1;
+          if (!lastAssigned[s.substitute] || dateStr > lastAssigned[s.substitute]) {
+            lastAssigned[s.substitute] = dateStr;
+          }
         }
       }
     }
@@ -194,19 +202,24 @@ function loadWeeklyLoad() {
   const logSh = ss.getSheetByName(LOG_TAB);
   if (logSh && logSh.getLastRow() > 1) {
     const logData = logSh.getDataRange().getValues();
+    const countedDuties = new Set();
     for (let i = 1; i < logData.length; i++) {
       const [savedAt, date, day, period, klass, subject, absent, sub, status] = logData[i];
-      if (!sub || status !== 'FILLED') continue;
+      if (!sub || (status !== 'FILLED' && status !== 'SUPERVISED')) continue;
       const dateStr = normDate(date);
       if (!dateStr) continue;
       const d = new Date(dateStr);
       if (isNaN(d.getTime()) || d < sevenDaysAgo) continue;
       if (draftDates[dateStr]) continue;   // already counted from drafts
+      const dutyKey = dateStr + '|' + sub + '|' + period;
+      if (countedDuties.has(dutyKey)) continue; // merged classes = one teacher duty
+      countedDuties.add(dutyKey);
       weekly[sub] = (weekly[sub] || 0) + 1;
+      if (!lastAssigned[sub] || dateStr > lastAssigned[sub]) lastAssigned[sub] = dateStr;
     }
   }
 
-  return {weekly: weekly, fromDate: sevenDaysAgo.toISOString().slice(0, 10)};
+  return {weekly: weekly, lastAssigned: lastAssigned, fromDate: sevenDaysAgo.toISOString().slice(0, 10)};
 }
 
 // ---- v4: same two-pass counting as loadWeeklyLoad, but bucketed per date
@@ -242,20 +255,30 @@ function loadDailyLoad(token) {
       let slots = [];
       try { slots = JSON.parse(draftData[i][5] || '[]'); } catch (e) { continue; }
       draftDates[dateStr] = true;
+      const countedDuties = new Set();
       for (const s of slots) {
-        if ((s.status === 'FILLED' || s.status === 'SUPERVISED') && s.substitute) bump(dateStr, s.substitute);
+        if ((s.status === 'FILLED' || s.status === 'SUPERVISED') && s.substitute) {
+          const dutyKey = s.substitute + '|' + s.period;
+          if (countedDuties.has(dutyKey)) continue;
+          countedDuties.add(dutyKey);
+          bump(dateStr, s.substitute);
+        }
       }
     }
   }
   const logSh = ss.getSheetByName(LOG_TAB);
   if (logSh && logSh.getLastRow() > 1) {
     const logData = logSh.getDataRange().getValues();
+    const countedDuties = new Set();
     for (let i = 1; i < logData.length; i++) {
       const row = logData[i];
       const sub = row[7], status = row[8];
-      if (!sub || status !== 'FILLED') continue;
+      if (!sub || (status !== 'FILLED' && status !== 'SUPERVISED')) continue;
       const dateStr = normDate(row[1]);
       if (!perDay[dateStr] || draftDates[dateStr]) continue;
+      const dutyKey = dateStr + '|' + sub + '|' + row[3];
+      if (countedDuties.has(dutyKey)) continue;
+      countedDuties.add(dutyKey);
       bump(dateStr, sub);
     }
   }

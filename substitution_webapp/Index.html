@@ -218,6 +218,18 @@ body{font-family:'Poppins','Segoe UI',Arial,sans-serif;background:linear-gradien
 .actions button{padding:11px 22px;border:none;border-radius:10px;font-size:.88rem;font-weight:700;cursor:pointer;transition:all .15s}
 .btn-auto{background:#059669;color:#fff}
 .btn-auto:hover{background:#047857}
+.btn-undo-auto{background:#475569;color:#fff}
+.btn-undo-auto:hover{background:#334155}
+.smart-reason{margin-top:5px;font-size:.67rem;color:#64748b;line-height:1.35;max-width:420px}
+.smart-preview-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:0 0 14px}
+.smart-preview-summary div{padding:9px 10px;border:1px solid #dbeafe;border-radius:9px;background:#f8fafc;text-align:center}
+.smart-preview-summary b{display:block;font-size:1.05rem;color:#0f172a}
+.smart-preview-summary span{font-size:.68rem;color:#64748b;text-transform:uppercase;letter-spacing:.04em}
+.smart-preview-list{max-height:310px;overflow:auto;border:1px solid #e2e8f0;border-radius:10px}
+.smart-preview-row{padding:9px 11px;border-bottom:1px solid #e2e8f0;font-size:.78rem;line-height:1.4}
+.smart-preview-row:last-child{border-bottom:0}
+.smart-preview-row .why{color:#64748b;font-size:.7rem;margin-top:2px}
+.smart-preview-row.gap{background:#fff7ed;color:#9a3412}
 .btn-publish{background:#0041a3;color:#fff}
 .btn-publish:hover{background:#002b6e}
 .btn-memo{background:#7c3aed;color:#fff}
@@ -986,6 +998,7 @@ body{font-family:'Poppins','Segoe UI',Arial,sans-serif;background:linear-gradien
 
 <div class="actions">
   <button class="btn-auto"    onclick="autoFill()">⚡ Smart Auto-fill</button>
+  <button class="btn-undo-auto" id="undo-auto-btn" onclick="undoAutoFill()" style="display:none">↶ Undo Auto-fill</button>
   <button class="btn-publish" onclick="publish(false)">📋 Publish &amp; Save</button>
   <button class="btn-memo"    onclick="printMemo()">🖨 Print Memo</button>
   <button class="btn-memo"    style="background:#0891b2" onclick="publish(true)">📄 Make Google Doc</button>
@@ -1082,7 +1095,48 @@ const MOTHER_TEACHERS = (function() {
   }
   return m;
 })();
-const MOTHER_PENALTY = 100;   // applied silently — no badge, no why-line
+const MOTHER_PENALTY = 100;   // manual-picker demotion; Smart Auto-fill uses a hard exclusion
+
+// Smart scheduling policy. Hard rules protect correctness; soft penalties preserve
+// administrator flexibility while discouraging overload.
+const SMART_POLICY = Object.freeze({
+  minimumScore: 30,
+  dutyPoolBonus: 200,
+  coTeacherBonus: 120,
+  sameSubjectBonus: 100,
+  sameClassBonus: 30,
+  classTeacherBonus: 25,
+  continuityBonus: 20,
+  adjacentLessonBonus: 15,
+  todayAssignmentPenalty: 5,
+  recentAssignmentPenalty: 2,
+  preferredDailyMaximum: 2,
+  overDailyMaximumPenalty: 40,
+  preferredConsecutiveMaximum: 3,
+  overConsecutivePenalty: 25,
+  mergedClassBonus: 30
+});
+
+function _recentLoad(name) {
+  return ((_WEEKLY && _WEEKLY.weekly) || {})[name] || 0;
+}
+
+function _lastAssigned(name) {
+  return ((_WEEKLY && _WEEKLY.lastAssigned) || {})[name] || '';
+}
+
+// Least-recently-assigned wins exact score ties; alphabetical order is only the
+// final deterministic fallback.
+function _fairCandidateCompare(a, b) {
+  if (b.score !== a.score) return b.score - a.score;
+  const ad = _lastAssigned(a.name), bd = _lastAssigned(b.name);
+  if (ad !== bd) {
+    if (!ad) return -1;
+    if (!bd) return 1;
+    return ad.localeCompare(bd);
+  }
+  return a.name.localeCompare(b.name);
+}
 
 // v3.18 — Acting class teacher helpers
 function _ctReverseMap() {
@@ -1093,14 +1147,15 @@ function _ctReverseMap() {
   return m;
 }
 
-function eligibleActingCTsFor(className) {
+function eligibleActingCTsFor(className, planState) {
   // Non-CT teachers, not absent today, not already picked as acting CT elsewhere.
-  // 3★ = teaches this class today (per coTeachers map); 1★ otherwise.
-  const day = state.day;
+  // 3★ = teaches this class today (per coTeachers map); workload breaks ties.
+  const ps = planState || state;
+  const day = ps.day;
   const ctRev = _ctReverseMap();
-  const absentNames = new Set(state.absent.map(a => a.name));
+  const absentNames = new Set(ps.absent.map(a => a.name));
   const pickedElsewhere = new Set();
-  for (const [cls, t] of Object.entries(state.actingCT || {})) {
+  for (const [cls, t] of Object.entries(ps.actingCT || {})) {
     if (cls !== className && t) pickedElsewhere.add(t);
   }
   const teachesToday = new Set();
@@ -1112,9 +1167,27 @@ function eligibleActingCTsFor(className) {
     if (ctRev[t]) continue;            // is a CT of some class (covers mother teachers)
     if (absentNames.has(t)) continue;
     if (pickedElsewhere.has(t)) continue;
-    out.push({name: t, stars: teachesToday.has(t) ? 3 : 1});
+    const teachesClass = teachesToday.has(t);
+    let today = 0;
+    const countedPeriods = new Set();
+    for (const s of (ps.slots || [])) {
+      if ((s.status === 'FILLED' || s.status === 'SUPERVISED') && s.substitute === t && !countedPeriods.has(s.period)) {
+        countedPeriods.add(s.period);
+        today++;
+      }
+    }
+    const week = _recentLoad(t);
+    const score = (teachesClass ? 100 : 0) - today * 10 - week * 2;
+    out.push({
+      name: t,
+      stars: teachesClass ? 3 : 1,
+      score: score,
+      why: teachesClass ? ['teaches this class today'] : ['available for administrator review'],
+      today: today,
+      week: week
+    });
   }
-  out.sort((a, b) => b.stars - a.stars || a.name.localeCompare(b.name));
+  out.sort((a, b) => b.stars - a.stars || _fairCandidateCompare(a, b));
   return out;
 }
 
@@ -1178,6 +1251,7 @@ let activeModalSlotIdx = null;
 let modalMode = 'SUB';
 let autoSaveTimer = null;
 let lastLoadedDate = null;   // for cancelling stale auto-saves when date changes mid-flight
+let lastAutoFillSnapshot = null;
 
 // ---- Auth gate (v3.5) ----
 function getToken() { return sessionStorage.getItem('gdgpsd_sub_token') || ''; }
@@ -1309,6 +1383,8 @@ function navDate(delta) {
 function onDateChange() {
   // Flush any pending save for the OLD date before switching
   if (autoSaveTimer) { clearTimeout(autoSaveTimer); autoSaveTimer = null; flushAutoSave(); }
+  lastAutoFillSnapshot = null;
+  _setAutoUndoAvailable(false);
   const d = new Date(document.getElementById('date-input').value);
   state.date = document.getElementById('date-input').value;
   state.day = DAYS[d.getDay()];
@@ -2221,6 +2297,9 @@ function openMergePopover(slotIdx, btnEl) {
 
 function slotHtml(s, i) {
   let subBox, klass = 'slot';
+  const smartExplain = (s.smartReason && s.substitute)
+    ? '<div class="smart-reason">⚡ Smart ' + escapeHtml(String(s.smartScore || '')) + ' · ' + escapeHtml(s.smartReason) + '</div>'
+    : '';
   // v3.13 — must-reschedule rule wins styling even if a sub is later picked
   if (s.mustReschedule && !s.substitute && s.status === 'PENDING') {
     subBox = '<span style="background:#fed7aa;color:#9a3412;padding:5px 12px;border-radius:999px;font-size:.78rem;font-weight:700;border:1px solid #fdba74">⚠ RESCHEDULE — don\'t substitute</span>' +
@@ -2231,10 +2310,10 @@ function slotHtml(s, i) {
     subBox = '<span class="cancelled-tag">CANCELLED</span> <span style="cursor:pointer;color:#0041a3;font-size:.85rem;margin-left:6px;text-decoration:underline" onclick="openModal(' + i + ')">change</span>';
     klass = 'slot cancelled';
   } else if (s.status === 'SUPERVISED' && s.substitute) {
-    subBox = '<span class="filled-sub supervision">👁 Sup: ' + escapeHtml(s.substitute) + ' <span class="change" onclick="openModal(' + i + ')">✎</span></span>';
+    subBox = '<span class="filled-sub supervision">👁 Sup: ' + escapeHtml(s.substitute) + ' <span class="change" onclick="openModal(' + i + ')">✎</span></span>' + smartExplain;
     klass = 'slot supervised';
   } else if (s.substitute) {
-    subBox = '<span class="filled-sub">✓ ' + escapeHtml(s.substitute) + ' <span class="change" onclick="openModal(' + i + ')">✎</span></span>';
+    subBox = '<span class="filled-sub">✓ ' + escapeHtml(s.substitute) + ' <span class="change" onclick="openModal(' + i + ')">✎</span></span>' + smartExplain;
     klass = 'slot filled';
   } else {
     // v3.14 — also offer Merge for pending slots if any candidate exists
@@ -2446,6 +2525,152 @@ function closeModal() {
 }
 function cancelSlot() { confirmCancel(); }
 
+function _buildSlotContext(slot, planState) {
+  const ps = planState || state;
+  const day = ps.day, period = slot.period;
+  const busy = new Set();
+  for (const t of (_DATA.teachers || [])) {
+    if (((_DATA.schedule[t] || {})[day] || {})[period]) busy.add(t);
+  }
+  const absentNames = new Set((ps.absent || []).map(a => a.name));
+  const alreadyAllocatedSlots = {};
+  const todayExtras = {};
+  const countedDuties = new Set();
+  for (const s of (ps.slots || [])) {
+    if (s !== slot && (s.status === 'FILLED' || s.status === 'SUPERVISED') && s.substitute) {
+      // Two merged classes in one period are one teacher duty, not two.
+      const dutyKey = s.substitute + '|' + s.period;
+      if (!countedDuties.has(dutyKey)) {
+        countedDuties.add(dutyKey);
+        todayExtras[s.substitute] = (todayExtras[s.substitute] || 0) + 1;
+      }
+      if (s.period === period) alreadyAllocatedSlots[s.substitute] = s;
+    }
+  }
+
+  const prevPeriod = String(+period - 1);
+  let continuityTeacher = null;
+  for (const s of (ps.slots || [])) {
+    if (s.class === slot.class && s.period === prevPeriod &&
+        (s.status === 'FILLED' || s.status === 'SUPERVISED') && s.substitute) {
+      continuityTeacher = s.substitute;
+      break;
+    }
+  }
+
+  // Use the authoritative Class Teachers map first. Fall back to the historic
+  // "most lessons in this class today" heuristic when no mapping is available.
+  let ctTeacher = ((_DATA.classTeachers || {})[slot.class]) || null;
+  let ctMax = ctTeacher ? 4 : 0;
+  if (!ctTeacher) {
+    const classLoad = {};
+    for (const t of (_DATA.teachers || [])) {
+      const ds = (_DATA.schedule[t] || {})[day] || {};
+      for (const p of PERIODS) {
+        if (ds[p] && ds[p].class === slot.class) classLoad[t] = (classLoad[t] || 0) + 1;
+      }
+    }
+    for (const [t, n] of Object.entries(classLoad)) {
+      if (n > ctMax) { ctMax = n; ctTeacher = t; }
+    }
+  }
+
+  const coTeacherInfo = {};
+  const coTeachersHere = (((_DATA.coTeachers || {})[slot.class] || {})[day] || {})[period] || [];
+  for (const entry of coTeachersHere) {
+    if (entry.teacher !== slot.absent && !absentNames.has(entry.teacher)) {
+      coTeacherInfo[entry.teacher] = entry.subject;
+    }
+  }
+  return {ps, day, period, busy, absentNames, alreadyAllocatedSlots, todayExtras,
+          continuityTeacher, ctTeacher, ctMax, coTeacherInfo};
+}
+
+function _prospectiveTeachingStreak(name, slot, planState) {
+  const ps = planState || state;
+  const occupied = new Set();
+  const regular = ((_DATA.schedule[name] || {})[ps.day] || {});
+  for (const p of PERIODS) if (regular[p]) occupied.add(+p);
+  for (const s of (ps.slots || [])) {
+    if (s !== slot && s.substitute === name &&
+        (s.status === 'FILLED' || s.status === 'SUPERVISED')) occupied.add(+s.period);
+  }
+  const target = +slot.period;
+  occupied.add(target);
+  let start = target, end = target;
+  while (occupied.has(start - 1)) start--;
+  while (occupied.has(end + 1)) end++;
+  return end - start + 1;
+}
+
+// Single source of truth for both the manual picker and Smart Auto-fill.
+function rankCandidatesForSlot(slot, options) {
+  const opts = options || {};
+  const ps = opts.planState || state;
+  const ctx = _buildSlotContext(slot, ps);
+  const candidates = [];
+  for (const t of (_DATA.teachers || [])) {
+    const isCo = !!ctx.coTeacherInfo[t];
+    const isMother = !!MOTHER_TEACHERS[t];
+    const alreadyIn = ctx.alreadyAllocatedSlots[t] || null;
+    if (ctx.absentNames.has(t)) continue;
+    if (ctx.busy.has(t) && !isCo) continue;
+    if (alreadyIn && !opts.allowSwap) continue;
+    // Early-years class teachers are a hard automation guardrail. They remain
+    // visible in the manual picker, where an administrator can override.
+    if (opts.forAuto && isMother) continue;
+
+    let score = 0;
+    const why = [];
+    const breakdown = [];
+    function add(points, label) {
+      score += points;
+      breakdown.push({points: points, label: label});
+      if (points > 0) why.push(label);
+    }
+    if ((ps.dutyPool || []).includes(t)) add(SMART_POLICY.dutyPoolBonus, 'on duty');
+    if (isCo) add(SMART_POLICY.coTeacherBonus, 'co-teaching ' + slot.class);
+    if ((_DATA.teacherSubjects[t] || []).includes(slot.subject)) add(SMART_POLICY.sameSubjectBonus, 'teaches ' + slot.subject);
+    if ((_DATA.teacherClasses[t] || []).includes(slot.class)) add(SMART_POLICY.sameClassBonus, 'teaches ' + slot.class);
+    if (t === ctx.ctTeacher && ctx.ctMax >= 4) add(SMART_POLICY.classTeacherBonus, 'class teacher');
+    if (ctx.continuityTeacher === t) add(SMART_POLICY.continuityBonus, 'covered previous period');
+
+    const sched = (_DATA.schedule[t] || {})[ctx.day] || {};
+    const me = +slot.period;
+    const adjacent = (!!sched[String(me - 1)]) !== (!!sched[String(me + 1)]);
+    if (adjacent) add(SMART_POLICY.adjacentLessonBonus, 'adjacent lesson');
+
+    const todayN = ctx.todayExtras[t] || 0;
+    const weekN = _recentLoad(t);
+    if (todayN) add(-todayN * SMART_POLICY.todayAssignmentPenalty, todayN + ' already today');
+    if (weekN) add(-weekN * SMART_POLICY.recentAssignmentPenalty, weekN + ' in recent 7-day load');
+    if (todayN >= SMART_POLICY.preferredDailyMaximum) {
+      add(-(todayN - SMART_POLICY.preferredDailyMaximum + 1) * SMART_POLICY.overDailyMaximumPenalty,
+          'above preferred daily load');
+    }
+    const streak = _prospectiveTeachingStreak(t, slot, ps);
+    if (streak > SMART_POLICY.preferredConsecutiveMaximum) {
+      add(-(streak - SMART_POLICY.preferredConsecutiveMaximum) * SMART_POLICY.overConsecutivePenalty,
+          'would create ' + streak + ' consecutive periods');
+    }
+    if (isMother) add(-MOTHER_PENALTY, 'early-years CT protection');
+    if (alreadyIn) add(-3, 'swap required');
+
+    candidates.push({
+      name: t, score: score, why: why, breakdown: breakdown,
+      today: todayN, week: weekN,
+      isCT: (t === ctx.ctTeacher && ctx.ctMax >= 4),
+      isCoTeacher: isCo, coSubject: ctx.coTeacherInfo[t] || '',
+      isMother: isMother, motherClass: MOTHER_TEACHERS[t] || '',
+      alreadyInSlot: alreadyIn,
+      isOnDuty: (ps.dutyPool || []).includes(t),
+      isCurrentPick: !!(slot.substitute === t && (slot.status === 'FILLED' || slot.status === 'SUPERVISED')),
+      prospectiveStreak: streak
+    });
+  }
+  return candidates.sort(_fairCandidateCompare);
+}
+
 function renderModalBody() {
   const body = document.getElementById('modal-body');
   const foot = document.getElementById('modal-foot');
@@ -2465,116 +2690,8 @@ function renderModalBody() {
   foot.style.display = 'flex';
   document.getElementById('modal-note').value = slot.note || '';
 
-  const day = state.day, period = slot.period;
-  const busy = new Set();
-  for (const t of _DATA.teachers) {
-    const cell = ((_DATA.schedule[t] || {})[day] || {})[period];
-    if (cell) busy.add(t);
-  }
-  const absentNames = state.absent.map(a => a.name);
-  const alsoTaken = new Set();
-  for (const s of state.slots) {
-    if (s !== slot && s.period === period && (s.status === 'FILLED' || s.status === 'SUPERVISED') && s.substitute) alsoTaken.add(s.substitute);
-  }
-  const todayExtras = {};
-  for (const s of state.slots) {
-    if ((s.status === 'FILLED' || s.status === 'SUPERVISED') && s.substitute) todayExtras[s.substitute] = (todayExtras[s.substitute] || 0) + 1;
-  }
-  const prevPeriod = String(+slot.period - 1);
-  const continuityTeacher = (() => {
-    for (const s of state.slots) {
-      if (s.class === slot.class && s.period === prevPeriod && (s.status === 'FILLED' || s.status === 'SUPERVISED') && s.substitute) return s.substitute;
-    }
-    return null;
-  })();
-  function hasAdjacentGap(t) {
-    const sched = (_DATA.schedule[t] || {})[day] || {};
-    const me = +slot.period;
-    const before = sched[String(me - 1)];
-    const after  = sched[String(me + 1)];
-    return (before && !after) || (!before && after);
-  }
-  // Identify if any teacher is the regular class teacher (CT) — heuristic: teacher who has the most periods in this class today
-  const classLoad = {};
-  for (const t of _DATA.teachers) {
-    const ds = (_DATA.schedule[t] || {})[day] || {};
-    for (const p of PERIODS) {
-      if (ds[p] && ds[p].class === slot.class) classLoad[t] = (classLoad[t] || 0) + 1;
-    }
-  }
-  let ctTeacher = null, ctMax = 0;
-  for (const [t, n] of Object.entries(classLoad)) if (n > ctMax) { ctMax = n; ctTeacher = t; }
-
-  // ---- v3.4 co-teacher (split-class) detection ----
-  // If another teacher is teaching the SAME class at the SAME period (split class),
-  // they can absorb both groups even though they're "busy".
-  const coTeacherInfo = {};   // name → {subject_they_teach} for co-teachers in this slot
-  const coTeachersHere = ((_DATA.coTeachers || {})[slot.class] || {})[day] || {};
-  for (const entry of (coTeachersHere[period] || [])) {
-    if (entry.teacher !== slot.absent && !absentNames.includes(entry.teacher)) {
-      coTeacherInfo[entry.teacher] = entry.subject;
-    }
-  }
-
-  // Build a map: teachers already substituting in THIS period (other slots) → slot ref.
-  // We KEEP these in the candidate list (v3.7) so the admin can SWAP them in here.
-  const alreadyAllocatedSlots = {};
-  for (const s of state.slots) {
-    if (s !== slot && s.period === period && (s.status === 'FILLED' || s.status === 'SUPERVISED') && s.substitute) {
-      alreadyAllocatedSlots[s.substitute] = s;
-    }
-  }
-
-  const candidates = _DATA.teachers
-    .filter(t => (!busy.has(t) || coTeacherInfo[t]) && !absentNames.includes(t))
-    .map(t => {
-      let score = 0;
-      const why = [];
-      const isCo = !!coTeacherInfo[t];
-      const isMother = !!MOTHER_TEACHERS[t];
-      const alreadyIn = alreadyAllocatedSlots[t] || null;
-      if (isCo) {
-        score += 120;
-        why.push('🤝 Co-teaching ' + slot.class + ' (split with ' + coTeacherInfo[t] + ')');
-      }
-      if ((_DATA.teacherSubjects[t] || []).includes(slot.subject)) { score += 100; why.push('teaches ' + slot.subject); }
-      if ((_DATA.teacherClasses[t] || []).includes(slot.class))    { score += 30;  why.push('teaches ' + slot.class); }
-      if (t === ctTeacher && ctMax >= 4)                           { score += 25;  why.push('class teacher'); }
-      if (continuityTeacher === t)                                 { score += 20;  why.push('covered prev period'); }
-      if (hasAdjacentGap(t))                                       { score += 15;  why.push('adjacent gap'); }
-      const todayN = todayExtras[t] || 0;
-      const weekN = (_WEEKLY.weekly || {})[t] || 0;
-      score -= todayN * 5;
-      score -= weekN * 2;
-      if (isMother) {
-        // v3.9 — silent demotion (no badge, no why-line). They just sort to the bottom.
-        score -= MOTHER_PENALTY;
-      }
-      if (alreadyIn) {
-        // Slight penalty + compact badge (no verbose why-line); the highlighted purple cell
-        // in the schedule grid below makes the swap-status visually obvious.
-        score -= 3;
-      }
-      // v3.13 — on-duty pool gets a strong promotion (+200) so they front-load the list
-      const isOnDuty = (state.dutyPool || []).includes(t);
-      if (isOnDuty) {
-        score += 200;
-        why.unshift('🛡 today\'s on-duty teacher');
-      }
-      // v3.16 — already the chosen substitute for THIS slot (re-open after publish)
-      const isCurrentPick = !!(slot.substitute === t &&
-        (slot.status === 'FILLED' || slot.status === 'SUPERVISED'));
-      return {name: t, score, why, today: todayN, week: weekN,
-              isCT: (t === ctTeacher && ctMax >= 4),
-              isCoTeacher: isCo,
-              coSubject: coTeacherInfo[t] || '',
-              isMother: isMother,
-              motherClass: MOTHER_TEACHERS[t] || '',
-              alreadyInSlot: alreadyIn,
-              isOnDuty: isOnDuty,
-              isCurrentPick: isCurrentPick};
-    })
-    .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
+  const day = state.day;
+  const candidates = rankCandidatesForSlot(slot, {allowSwap: true, forAuto: false});
   // Show ALL free teachers — no slice. Grouped by score tier below.
 
   if (candidates.length === 0) {
@@ -2587,7 +2704,8 @@ function renderModalBody() {
   const coCount        = candidates.filter(c => c.isCoTeacher).length;
   const swapCount      = candidates.filter(c => c.alreadyInSlot).length;
   const motherCount    = candidates.filter(c => c.isMother).length;
-  const genericCount   = candidates.length - strongCount - coCount - swapCount - motherCount;
+  const genericCount   = candidates.filter(c => c.score < SMART_POLICY.minimumScore &&
+    !c.isCoTeacher && !c.alreadyInSlot && !c.isMother).length;
 
   // Build the visual context grid
   // Row 1: class's full-day schedule (look up via any teacher's schedule for this class)
@@ -2604,7 +2722,7 @@ function renderModalBody() {
     }
   }
 
-  // Count banner — mother teachers omitted (silent demotion in v3.9)
+  // Counts are independent badges; a candidate may belong to more than one group.
   let html = '<div class="count-banner">' +
     '<b>' + candidates.length + ' candidate' + (candidates.length === 1 ? '' : 's') + '</b> for this period' +
     (coCount     ? ' · <span style="color:#d97706;font-weight:700">🤝 ' + coCount + ' co-teaching</span>' : '') +
@@ -2654,7 +2772,7 @@ function renderCandRow(c, slot, day) {
   if (c.isOnDuty) badges += '<span class="badge" style="background:#fef3c7;color:#92400e;font-weight:700">🛡 On duty</span>';
   if (c.alreadyInSlot) badges += '<span class="badge already" title="Already substituting ' + escapeHtml(c.alreadyInSlot.class) + ' P' + c.alreadyInSlot.period + ' — click to swap">🔄 In ' + escapeHtml(c.alreadyInSlot.class) + ' P' + c.alreadyInSlot.period + '</span>';
   if (c.isCoTeacher) badges += '<span class="badge coteach">🤝 Co-teacher</span>';
-  // v3.9 — mother teacher badge removed (silent demotion)
+  if (c.isMother) badges += '<span class="badge" style="background:#fce7f3;color:#9d174d" title="Protected during Smart Auto-fill; manual override remains available">🛡 Early-years CT</span>';
   if (c.isCT) badges += '<span class="badge ct">CT</span>';
   if (c.today > 0) badges += '<span class="badge" title="' + c.today + ' substitution' + (c.today === 1 ? '' : 's') + ' already covered today">Today · ' + c.today + '</span>';
   if (c.week > 0) badges += '<span class="badge week" title="' + c.week + ' substitution' + (c.week === 1 ? '' : 's') + ' covered in the past 7 days (counts against this teacher\'s score for fairness)">Last 7d · ' + c.week + '</span>';
@@ -2739,6 +2857,8 @@ function assignFromModal(name) {
         conflictSlot.substitute = null;
         conflictSlot.status = 'PENDING';
         conflictSlot.type = 'SUB';
+        delete conflictSlot.smartScore;
+        delete conflictSlot.smartReason;
         setStatus('Moved ' + name + ' from ' + conflictSlot.class + ' P' + conflictSlot.period +
                   ' → now PENDING. Assign someone there next.', 'success');
         setTimeout(() => setStatus('', ''), 5000);
@@ -2751,6 +2871,8 @@ function assignFromModal(name) {
     slot.substitute = name;
     slot.status = modalMode === 'SUPERVISION' ? 'SUPERVISED' : 'FILLED';
     slot.type = modalMode;
+    delete slot.smartScore;
+    delete slot.smartReason;
     // v3.14 — if merged with another slot, copy the assignment over
     if (slot.mergedWithKey) {
       const partner = state.slots.find(x => _slotKey(x) === slot.mergedWithKey);
@@ -2758,6 +2880,8 @@ function assignFromModal(name) {
         partner.substitute = name;
         partner.status = slot.status;
         partner.type = slot.type;
+        delete partner.smartScore;
+        delete partner.smartReason;
       }
     }
     closeModal(); render(); scheduleAutoSave();
@@ -2769,94 +2893,276 @@ function confirmCancel() {
   slot.substitute = null;
   slot.status = 'CANCELLED';
   slot.type = 'CANCEL';
+  delete slot.smartScore;
+  delete slot.smartReason;
   closeModal(); render(); scheduleAutoSave();
 }
 
-function autoFill() {
-  let filled = 0, skipped = 0;
-  for (let i = 0; i < state.slots.length; i++) {
-    const slot = state.slots[i];
-    if (slot.status === 'FILLED' || slot.status === 'SUPERVISED' || slot.status === 'CANCELLED') continue;
-    if (slot.mustReschedule) { skipped++; continue; }   // v3.13 — reschedule rule wins
-    activeModalSlotIdx = i; modalMode = 'SUB';
-    // mimic scoring
-    const day = state.day, period = slot.period;
-    const busy = new Set();
-    for (const t of _DATA.teachers) {
-      const cell = ((_DATA.schedule[t] || {})[day] || {})[period];
-      if (cell) busy.add(t);
-    }
-    const absentNames = state.absent.map(a => a.name);
-    const alsoTaken = new Set();
-    for (const s of state.slots) {
-      if (s !== slot && s.period === period && (s.status === 'FILLED' || s.status === 'SUPERVISED') && s.substitute) alsoTaken.add(s.substitute);
-    }
-    const todayExtras = {};
-    for (const s of state.slots) {
-      if ((s.status === 'FILLED' || s.status === 'SUPERVISED') && s.substitute) todayExtras[s.substitute] = (todayExtras[s.substitute] || 0) + 1;
-    }
-    const prevPeriod = String(+slot.period - 1);
-    const continuityTeacher = (() => {
-      for (const s of state.slots) {
-        if (s.class === slot.class && s.period === prevPeriod && (s.status === 'FILLED' || s.status === 'SUPERVISED') && s.substitute) return s.substitute;
+function _pendingGroupsForPeriod(planState, period) {
+  const groups = [];
+  const seen = new Set();
+  for (const slot of (planState.slots || [])) {
+    if (seen.has(slot) || slot.period !== period || slot.status !== 'PENDING') continue;
+    const members = [slot];
+    seen.add(slot);
+    if (slot.mergedWithKey) {
+      const partner = planState.slots.find(s => _slotKey(s) === slot.mergedWithKey);
+      if (partner && partner !== slot && partner.period === period && partner.status === 'PENDING') {
+        members.push(partner);
+        seen.add(partner);
       }
-      return null;
-    })();
-    function adj(t) {
-      const sched = (_DATA.schedule[t] || {})[day] || {};
-      const me = +slot.period;
-      return (sched[String(me-1)] && !sched[String(me+1)]) || (!sched[String(me-1)] && sched[String(me+1)]);
     }
-    // v3.4 — pull co-teachers (split-class) too
-    const coHereAuto = {};
-    const coAuto = (((_DATA.coTeachers || {})[slot.class] || {})[day] || {})[period] || [];
-    for (const e of coAuto) {
-      if (e.teacher !== slot.absent && !absentNames.includes(e.teacher)) coHereAuto[e.teacher] = e.subject;
-    }
-    // Auto-fill must NEVER cause a swap — keep the alsoTaken filter here, and
-    // also apply the mother-teacher penalty so they're never auto-picked.
-    const cands = _DATA.teachers
-      .filter(t => (!busy.has(t) || coHereAuto[t]) && !absentNames.includes(t) && !alsoTaken.has(t))
-      .map(t => {
-        let score = 0;
-        if (coHereAuto[t]) score += 120;
-        if ((_DATA.teacherSubjects[t] || []).includes(slot.subject)) score += 100;
-        if ((_DATA.teacherClasses[t]  || []).includes(slot.class))   score += 30;
-        if (continuityTeacher === t) score += 20;
-        if (adj(t)) score += 15;
-        score -= (todayExtras[t] || 0) * 5;
-        score -= ((_WEEKLY.weekly || {})[t] || 0) * 2;
-        if (MOTHER_TEACHERS[t]) score -= MOTHER_PENALTY;
-        if ((state.dutyPool || []).includes(t)) score += 200;   // v3.13
-        return {name: t, score};
-      })
-      .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
-    if (cands.length && cands[0].score >= 30) {
-      slot.substitute = cands[0].name; slot.status = 'FILLED'; slot.type = 'SUB';
-      filled++;
-    } else { skipped++; }
+    groups.push({members: members});
   }
-  activeModalSlotIdx = null;
-  // v3.18 — also smart-fill acting CTs for any absent class teacher who doesn't
-  // have one picked yet. 3★ candidates (teaches that class today) win.
-  let actingFilled = 0;
-  if (!state.actingCT) state.actingCT = {};
+  return groups;
+}
+
+function _rankCandidatesForGroup(group, planState) {
+  const perSlot = group.members.map(slot => {
+    const map = {};
+    for (const c of rankCandidatesForSlot(slot, {allowSwap: false, forAuto: true, planState: planState})) map[c.name] = c;
+    return map;
+  });
+  const out = [];
+  for (const name of (_DATA.teachers || [])) {
+    const matches = perSlot.map(m => m[name]);
+    if (matches.some(x => !x)) continue; // must be eligible for every merged class
+    let score = Math.round(matches.reduce((sum, c) => sum + c.score, 0) / matches.length);
+    if (group.members.length > 1) score += SMART_POLICY.mergedClassBonus;
+    if (score < SMART_POLICY.minimumScore) continue;
+    const why = [];
+    const warnings = [];
+    for (const c of matches) {
+      for (const reason of c.why) if (!why.includes(reason)) why.push(reason);
+      for (const b of c.breakdown) {
+        if (b.points < 0) {
+          const warning = b.label + ' (' + b.points + ')';
+          if (!warnings.includes(warning)) warnings.push(warning);
+        }
+      }
+    }
+    if (group.members.length > 1) why.unshift('keeps merged classes together');
+    out.push({name: name, score: score, why: why, warnings: warnings});
+  }
+  return out.sort(_fairCandidateCompare);
+}
+
+// Maximum-weight bipartite assignment. Every slot-group is matched against a
+// unique teacher, with dummy columns allowing genuinely weak matches to remain open.
+function _hungarianMax(weights) {
+  const n = weights.length;
+  if (!n) return [];
+  const m = weights[0].length;
+  const u = new Array(n + 1).fill(0), v = new Array(m + 1).fill(0);
+  const p = new Array(m + 1).fill(0), way = new Array(m + 1).fill(0);
+  for (let i = 1; i <= n; i++) {
+    p[0] = i;
+    let j0 = 0;
+    const minv = new Array(m + 1).fill(Infinity);
+    const used = new Array(m + 1).fill(false);
+    do {
+      used[j0] = true;
+      const i0 = p[j0];
+      let delta = Infinity, j1 = 0;
+      for (let j = 1; j <= m; j++) {
+        if (used[j]) continue;
+        const cur = -weights[i0 - 1][j - 1] - u[i0] - v[j];
+        if (cur < minv[j]) { minv[j] = cur; way[j] = j0; }
+        if (minv[j] < delta) { delta = minv[j]; j1 = j; }
+      }
+      for (let j = 0; j <= m; j++) {
+        if (used[j]) { u[p[j]] += delta; v[j] -= delta; }
+        else minv[j] -= delta;
+      }
+      j0 = j1;
+    } while (p[j0] !== 0);
+    do {
+      const j1 = way[j0];
+      p[j0] = p[j1];
+      j0 = j1;
+    } while (j0 !== 0);
+  }
+  const assignment = new Array(n).fill(-1);
+  for (let j = 1; j <= m; j++) if (p[j]) assignment[p[j] - 1] = j - 1;
+  return assignment;
+}
+
+function _optimisePeriod(groups, planState) {
+  const rankings = groups.map(g => _rankCandidatesForGroup(g, planState));
+  const nameSet = new Set();
+  for (const list of rankings) for (const c of list) nameSet.add(c.name);
+  const names = [...nameSet].sort((a, b) => _fairCandidateCompare({name: a, score: 0}, {name: b, score: 0}));
+  const dummyCount = groups.length;
+  const coverageBonus = 100000;
+  const impossible = -100000000;
+  const matrices = rankings.map((list, groupIndex) => {
+    const byName = {};
+    for (const c of list) byName[c.name] = c;
+    return names.map(name => byName[name]
+      ? coverageBonus * groups[groupIndex].members.length + byName[name].score
+      : impossible)
+      .concat(new Array(dummyCount).fill(0));
+  });
+  const pickedColumns = _hungarianMax(matrices);
+  return groups.map((group, i) => {
+    const col = pickedColumns[i];
+    if (col < 0 || col >= names.length) return {group: group, candidate: null};
+    const candidate = rankings[i].find(c => c.name === names[col]) || null;
+    return {group: group, candidate: candidate};
+  });
+}
+
+function _groupLabel(group) {
+  return group.members.map(s => s.class + ' ' + s.subject).join(' + ');
+}
+
+function buildSmartPlan() {
+  const planState = JSON.parse(JSON.stringify(state));
+  const assignments = [], gaps = [], actingAssignments = [];
+
+  // Repair a legacy half-merged state by copying the existing assignment to its
+  // pending partner before solving new work.
+  for (const slot of planState.slots) {
+    if (slot.status !== 'PENDING' || !slot.mergedWithKey) continue;
+    const partner = planState.slots.find(s => _slotKey(s) === slot.mergedWithKey);
+    if (partner && (partner.status === 'FILLED' || partner.status === 'SUPERVISED') && partner.substitute) {
+      slot.substitute = partner.substitute;
+      slot.status = partner.status;
+      slot.type = partner.type;
+      slot.smartScore = partner.smartScore || '';
+      slot.smartReason = 'kept merged classes together';
+      assignments.push({group: {members: [slot, partner]}, candidate: {
+        name: partner.substitute, score: partner.smartScore || '—',
+        why: ['repaired merged assignment'], warnings: []
+      }, repaired: true, changedCount: 1});
+    }
+  }
+
+  const periods = [...new Set((planState.slots || []).map(s => s.period))].sort((a, b) => +a - +b);
+  for (const period of periods) {
+    const allGroups = _pendingGroupsForPeriod(planState, period);
+    const solvable = [];
+    for (const group of allGroups) {
+      if (group.members.some(s => s.mustReschedule)) {
+        gaps.push({group: group, reason: 'reschedule rule'});
+      } else {
+        solvable.push(group);
+      }
+    }
+    for (const result of _optimisePeriod(solvable, planState)) {
+      if (!result.candidate) {
+        gaps.push({group: result.group, reason: 'no safe match reached score ' + SMART_POLICY.minimumScore});
+        continue;
+      }
+      const reason = result.candidate.why.slice(0, 3).join(' · ') || 'best eligible workload balance';
+      for (const slot of result.group.members) {
+        slot.substitute = result.candidate.name;
+        slot.status = 'FILLED';
+        slot.type = 'SUB';
+        slot.smartScore = result.candidate.score;
+        slot.smartReason = reason;
+      }
+      assignments.push(result);
+    }
+  }
+
+  if (!planState.actingCT) planState.actingCT = {};
   const ctRev = _ctReverseMap();
-  for (const a of state.absent) {
-    const cls = ctRev[a.name];
-    if (!cls) continue;
-    if (state.actingCT[cls]) continue;
-    const cands = eligibleActingCTsFor(cls);
-    // v3.18 — auto-fill only when a confident match exists (3★ = teaches this
-    // class today). 1★ picks are left for admin judgement.
-    if (cands.length && cands[0].stars >= 3) {
-      state.actingCT[cls] = cands[0].name;
-      actingFilled++;
+  for (const absence of (planState.absent || [])) {
+    const cls = ctRev[absence.name];
+    if (!cls || planState.actingCT[cls]) continue;
+    const candidates = eligibleActingCTsFor(cls, planState);
+    if (candidates.length && candidates[0].stars >= 3) {
+      planState.actingCT[cls] = candidates[0].name;
+      actingAssignments.push({className: cls, absent: absence.name, candidate: candidates[0]});
     }
   }
-  render(); scheduleAutoSave();
-  const actingMsg = actingFilled ? '  · Acting CT: ' + actingFilled + ' picked.' : '';
-  setStatus('Auto-fill: ' + filled + ' confident matches assigned. ' + skipped + ' slots need manual review.' + actingMsg, 'success');
+  return {nextState: planState, assignments: assignments, gaps: gaps, actingAssignments: actingAssignments};
+}
+
+function _smartPreviewHtml(plan) {
+  const filledSlots = plan.assignments.reduce((n, a) => n + (a.changedCount || a.group.members.length || 1), 0);
+  const gapSlots = plan.gaps.reduce((n, g) => n + (g.group.members.length || 1), 0);
+  let html = '<div class="smart-preview-summary">' +
+    '<div><b>' + filledSlots + '</b><span>slots covered</span></div>' +
+    '<div><b>' + gapSlots + '</b><span>manual review</span></div>' +
+    '<div><b>' + plan.actingAssignments.length + '</b><span>acting CTs</span></div></div>';
+  html += '<div class="smart-preview-list">';
+  for (const a of plan.assignments) {
+    const first = a.group.members[0];
+    const why = (a.candidate.why || []).join(' · ');
+    const warnings = (a.candidate.warnings || []).join(' · ');
+    html += '<div class="smart-preview-row"><b>P' + escapeHtml(first.period) + ' · ' +
+      escapeHtml(_groupLabel(a.group)) + '</b> → ' + escapeHtml(a.candidate.name) +
+      ' <span style="color:#059669;font-weight:700">(' + escapeHtml(a.candidate.score) + ')</span>' +
+      '<div class="why">' + escapeHtml(why || 'best eligible workload balance') +
+      (warnings ? '<br>Fairness checks: ' + escapeHtml(warnings) : '') + '</div></div>';
+  }
+  for (const a of plan.actingAssignments) {
+    html += '<div class="smart-preview-row"><b>Acting CT · ' + escapeHtml(a.className) + '</b> → ' +
+      escapeHtml(a.candidate.name) + '<div class="why">teaches this class today; workload used as tie-break</div></div>';
+  }
+  for (const g of plan.gaps) {
+    const first = g.group.members[0];
+    html += '<div class="smart-preview-row gap"><b>P' + escapeHtml(first.period) + ' · ' +
+      escapeHtml(_groupLabel(g.group)) + '</b><div class="why">Left open: ' + escapeHtml(g.reason) + '</div></div>';
+  }
+  html += '</div><p style="font-size:.7rem;color:#64748b;margin:10px 0 0">Existing manual assignments stay locked. Early-years class teachers are never auto-selected. You can undo immediately after applying.</p>';
+  return html;
+}
+
+function _setAutoUndoAvailable(show) {
+  const btn = document.getElementById('undo-auto-btn');
+  if (btn) btn.style.display = show ? '' : 'none';
+}
+
+function _applySmartPlan(plan) {
+  lastAutoFillSnapshot = {
+    date: state.date,
+    slots: JSON.parse(JSON.stringify(state.slots)),
+    actingCT: JSON.parse(JSON.stringify(state.actingCT || {}))
+  };
+  state.slots = plan.nextState.slots;
+  state.actingCT = plan.nextState.actingCT;
+  activeModalSlotIdx = null;
+  _setAutoUndoAvailable(true);
+  render();
+  scheduleAutoSave();
+  const filledSlots = plan.assignments.reduce((n, a) => n + (a.changedCount || a.group.members.length || 1), 0);
+  const gapSlots = plan.gaps.reduce((n, g) => n + (g.group.members.length || 1), 0);
+  setStatus('Smart plan applied: ' + filledSlots + ' slot(s) covered · ' + gapSlots + ' need manual review' +
+    (plan.actingAssignments.length ? ' · ' + plan.actingAssignments.length + ' acting CT assigned' : '') + '.', 'success');
+}
+
+function undoAutoFill() {
+  if (!lastAutoFillSnapshot || lastAutoFillSnapshot.date !== state.date) return;
+  state.slots = JSON.parse(JSON.stringify(lastAutoFillSnapshot.slots));
+  state.actingCT = JSON.parse(JSON.stringify(lastAutoFillSnapshot.actingCT));
+  lastAutoFillSnapshot = null;
+  _setAutoUndoAvailable(false);
+  render();
+  scheduleAutoSave();
+  setStatus('Smart Auto-fill undone. Previous assignments restored.', 'success');
+}
+
+function autoFill() {
+  if (!state.date || state.day === 'Sun' || !state.slots.length) {
+    setStatus('Add an absent teacher on a school day before running Smart Auto-fill.', 'error');
+    return;
+  }
+  try {
+    const plan = buildSmartPlan();
+    if (!plan.assignments.length && !plan.actingAssignments.length) {
+      setStatus(plan.gaps.length ? 'No safe automatic match found. Review the open slots manually.' : 'Nothing new to auto-fill.', 'error');
+      return;
+    }
+    const filledSlots = plan.assignments.reduce((n, a) => n + (a.changedCount || a.group.members.length || 1), 0);
+    v4confirm('Review Smart Auto-fill', _smartPreviewHtml(plan),
+      'Apply ' + filledSlots + ' slot' + (filledSlots === 1 ? '' : 's'), () => _applySmartPlan(plan));
+  } catch (err) {
+    console.error(err);
+    v4toast('Smart Auto-fill could not run.', escapeHtml((err && err.message) || String(err)), 'err');
+  }
 }
 
 // ── memo Doc bar: persistent, left-aligned, survives later status updates ──
@@ -3035,7 +3341,7 @@ function clearAll() {
     'Clear all absent teachers and assignments? (This clears today\'s draft for everyone.)',
     '↺ Clear all',
     () => {
-      state.absent = []; state.slots = []; state.actingCT = {}; hideMemoBar(); render(); scheduleAutoSave(); setStatus('', '');
+      state.absent = []; state.slots = []; state.actingCT = {}; lastAutoFillSnapshot = null; _setAutoUndoAvailable(false); hideMemoBar(); render(); scheduleAutoSave(); setStatus('', '');
     });
 }
 
