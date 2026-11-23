@@ -1114,9 +1114,9 @@ function applyRefresh(xmlText, token) {
   ctSh.getRange(1, 1, ctRows.length, 2).setValues(ctRows);
   ctSh.getRange(1, 1, 1, 2).setFontWeight('bold').setBackground('#0041a3').setFontColor('#ffffff');
 
-  // v3.17 — sync Teacher Emails tab: add any XML teachers not yet present
-  // (blank email). Preserve existing emails. Never delete rows. Keeps
-  // getData()'s "all teachers" union complete for new hires.
+  // v3.17 — sync Teacher Emails tab to the XML roster: add new teachers
+  // (blank email), preserve existing emails, and drop teachers no longer in
+  // the XML (otherwise departed staff linger in the planner's dropdown).
   let teSh = ss.getSheetByName('Teacher Emails');
   if (!teSh) {
     teSh = ss.insertSheet('Teacher Emails');
@@ -1130,13 +1130,9 @@ function applyRefresh(xmlText, token) {
       if (name) _teExisting[String(name).trim()] = email || '';
     }
   }
-  const _teToAdd = [];
-  for (const t of parsed.teachers) {
-    if (!(t in _teExisting)) _teToAdd.push([t, '']);
-  }
-  if (_teToAdd.length) {
-    teSh.getRange(teSh.getLastRow() + 1, 1, _teToAdd.length, 2).setValues(_teToAdd);
-  }
+  const _teRows = parsed.teachers.slice().sort().map(t => [t, _teExisting[t] || '']);
+  if (teSh.getLastRow() > 1) teSh.getRange(2, 1, teSh.getLastRow() - 1, 2).clearContent();
+  if (_teRows.length) teSh.getRange(2, 1, _teRows.length, 2).setValues(_teRows);
 
   // Audit log → Refresh History tab
   const histTab = 'Refresh History';

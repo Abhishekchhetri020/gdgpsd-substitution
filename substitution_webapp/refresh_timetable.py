@@ -377,10 +377,11 @@ def push_schedule(at: str, parsed: dict) -> None:
             for tname, info in (v12.get('by_teacher', {}) or {}).items():
                 if info.get('email'):
                     merged[tname] = info['email']
-        # 3. Union all XML teachers (blank email if unknown)
+        # 3. Ensure every XML teacher has a row (blank email if unknown)
         for tname in parsed['teachers']:
             merged.setdefault(tname, '')
-        for tname in sorted(merged.keys()):
+        # Keep only teachers in the XML — departed staff must not linger in the dropdown
+        for tname in sorted(parsed['teachers']):
             te_rows.append([tname, merged[tname]])
     except Exception as e:
         print(f'   ⚠ Teacher Emails: skipped ({e})')
